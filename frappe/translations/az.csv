@@ -223,4 +223,4 @@ Account for accepting donation payments,İanə ödənişlərini qəbul etmək ü
 Account for accepting membership payments,Üzvlük ödənişlərini qəbul etmək üçün Hesab,
 Account is mandatory to get payment entries,Ödəniş girişlərini əlavə etmək üçün Hesab bəlirləmənir məcburidir,
 Account is not set for the dashboard chart {0},{0} dashboard qrafiki üçün Hesab təyin edilməyib,
-Account number for account {0} is not available.<br> Please setup your Chart of Accounts correctly.,{0} Hesabı üçün hesab nömrəsi mövcud deyil.<br> Lütfən, Hesablar Planınızı düzgün quraşdırın.,
+"Account number for account {0} is not available.<br> Please setup your Chart of Accounts correctly.","{0} Hesabı üçün hesab nömrəsi mövcud deyil.<br> Lütfən, Hesablar Planınızı düzgün quraşdırın.",
