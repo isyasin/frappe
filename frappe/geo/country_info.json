@@ -186,7 +186,7 @@
  },
  "Azerbaijan": {
   "code": "az",
-  "currency": "USD",
+  "currency": "AZN",
   "currency_fraction": "Q\u0259pik",
   "currency_fraction_units": 100,
   "smallest_currency_fraction_value": 0.01,
