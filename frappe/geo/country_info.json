@@ -192,7 +192,7 @@
   "smallest_currency_fraction_value": 0.01,
   "currency_name": "AZN",
   "currency_symbol": "₼",
-  "date_format": "mm.dd.yyyy",
+  "date_format": "dd.mm.yyyy",
   "number_format": "# ###.##",
   "timezones": [
    "Asia/Baku"
