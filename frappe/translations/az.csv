@@ -351,7 +351,7 @@ Report Type,Hesabat növü,
 Inter Company Account,Şirkətlərarası Hesab,
 Parent Account,Ana Hesab,
 Frozen,Dondurulmuş,
-If the account is frozen, entries are allowed to restricted users.,Hesab dondurulubsa, girişlərə məhdudlaşdırılmış istifadəçilərə icazə verilir.
+"If the account is frozen, entries are allowed to restricted users.","Hesab dondurulubsa, girişlərə məhdudlaşdırılmış istifadəçilərə icazə verilir."
 Balance must be,Balans bərabərdir,
 Transactions Settings,Əməliyyatlar Parametrləri,
 Check Supplier Invoice Number Uniqueness,Təchizatçı faktura nömrəsinin unikallığını yoxlayın,
