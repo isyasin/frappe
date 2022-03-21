@@ -1503,8 +1503,9 @@ Permanently Submit,Təstiq edilsin,
 No,Xeyir,
 Yes,Bəli,
 Insufficient Stock,Qeyri-kafi qalıq,
-{0} units of {1} needed in {2} to complete this transaction.{2} anbarda {1} məhsuldan {0} miqdar lazımdır.
+{0} units of {1} needed in {2} to complete this transaction.{2} anbarda {1} məhsuldan {0} miqdar lazımdır.,
 Permanently delete,Silinsin,
 Saved,Qeydə Alındı,
 This Year,Bu İl,
-
+Updating,Yeniləmə...,
+The system is being updated. Please refresh again after a few moments.,"Sistem yenilənir. Lütfən, bir neçə dəqiqədən sonra yenidən yeniləyin.",
