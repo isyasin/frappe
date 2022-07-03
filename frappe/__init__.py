@@ -40,7 +40,7 @@ from .utils.lazy_loader import lazy_import
 # Lazy imports
 faker = lazy_import("faker")
 
-__version__ = "13.31.0"
+__version__ = "13.34.0"
 
 __title__ = "Frappe Framework"
 
@@ -898,9 +898,9 @@ def has_permission(doctype=None, ptype="read", doc=None, user=None, verbose=Fals
 	)
 	if throw and not out:
 		if doc:
-			frappe.throw(_("No permission for {0}").format(doc.doctype + " " + doc.name))
+			frappe.throw(_("No permission for {0}").format(_(doc.doctype) + " " + doc.name))
 		else:
-			frappe.throw(_("No permission for {0}").format(doctype))
+			frappe.throw(_("No permission for {0}").format(_(doctype)))
 
 	return out
 
@@ -1019,6 +1019,12 @@ def get_cached_doc(*args, **kwargs):
 	# database
 	doc = get_doc(*args, **kwargs)
 
+	# Set in cache
+	key = get_document_cache_key(doc.doctype, doc.name)
+
+	local.document_cache[key] = doc
+	cache().hset("document_cache", key, doc.as_dict())
+
 	return doc
 
 
@@ -1067,11 +1073,14 @@ def get_doc(*args, **kwargs):
 
 	doc = frappe.model.document.get_doc(*args, **kwargs)
 
-	# set in cache
+	# Update if exists in cache
 	if args and len(args) > 1:
 		key = get_document_cache_key(args[0], args[1])
-		local.document_cache[key] = doc
-		cache().hset("document_cache", key, doc.as_dict())
+		if key in local.document_cache:
+			local.document_cache[key] = doc
+
+		if cache().hexists("document_cache", key):
+			cache().hset("document_cache", key, doc.as_dict())
 
 	return doc
 
@@ -1747,15 +1756,18 @@ def get_value(*args, **kwargs):
 	return db.get_value(*args, **kwargs)
 
 
-def as_json(obj, indent=1):
+def as_json(obj, indent=1, separators=None) -> str:
 	from frappe.utils.response import json_handler
+
+	if separators is None:
+		separators = (",", ": ")
 
 	try:
 		return json.dumps(
-			obj, indent=indent, sort_keys=True, default=json_handler, separators=(",", ": ")
+			obj, indent=indent, sort_keys=True, default=json_handler, separators=separators
 		)
 	except TypeError:
-		return json.dumps(obj, indent=indent, default=json_handler, separators=(",", ": "))
+		return json.dumps(obj, indent=indent, default=json_handler, separators=separators)
 
 
 def are_emails_muted():
