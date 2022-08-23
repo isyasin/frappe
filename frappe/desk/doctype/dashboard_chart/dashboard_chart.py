@@ -9,12 +9,12 @@ import json
 
 import frappe
 from frappe import _
-from frappe.boot import get_allowed_reports
+from frappe.boot import get_allowed_report_names
 from frappe.config import get_modules_from_all_apps_for_user
 from frappe.model.document import Document
 from frappe.model.naming import append_number_if_name_exists
 from frappe.modules.export_file import export_to_files
-from frappe.utils import cint, get_datetime, getdate, now_datetime, nowdate
+from frappe.utils import cint, get_datetime, getdate, has_common, now_datetime, nowdate
 from frappe.utils.dashboard import cache_source
 from frappe.utils.data import format_date
 from frappe.utils.dateutils import (
@@ -43,10 +43,7 @@ def get_permission_query_conditions(user):
 	allowed_doctypes = [
 		frappe.db.escape(doctype) for doctype in frappe.permissions.get_doctypes_with_read()
 	]
-	allowed_reports = [
-		frappe.db.escape(key) if type(key) == str else key.encode("UTF8")
-		for key in get_allowed_reports()
-	]
+	allowed_reports = [frappe.db.escape(report) for report in get_allowed_report_names()]
 	allowed_modules = [
 		frappe.db.escape(module.get("module_name")) for module in get_modules_from_all_apps_for_user()
 	]
@@ -86,14 +83,16 @@ def has_permission(doc, ptype, user):
 		return True
 
 	if doc.chart_type == "Report":
-		allowed_reports = [
-			key if type(key) == str else key.encode("UTF8") for key in get_allowed_reports()
-		]
-		if doc.report_name in allowed_reports:
+		if doc.report_name in get_allowed_report_names():
 			return True
 	else:
 		allowed_doctypes = frappe.permissions.get_doctypes_with_read()
 		if doc.document_type in allowed_doctypes:
+			return True
+
+	if doc.roles:
+		allowed = [d.role for d in doc.roles]
+		if has_common(roles, allowed):
 			return True
 
 	return False
