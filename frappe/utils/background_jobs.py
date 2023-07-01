@@ -1,5 +1,3 @@
-from __future__ import print_function, unicode_literals
-
 import os
 import socket
 import time
@@ -30,9 +28,11 @@ def get_queues_timeout():
 	custom_workers_config = common_site_config.get("workers", {})
 	default_timeout = 300
 
+	# Note: Order matters here
+	# If no queues are specified then RQ prioritizes queues in specified order
 	return {
-		"default": default_timeout,
 		"short": default_timeout,
+		"default": default_timeout,
 		"long": 1500,
 		**{
 			worker: config.get("timeout", default_timeout)
@@ -191,6 +191,9 @@ def start_worker(queue=None, quiet=False):
 		# empty init is required to get redis_queue from common_site_config.json
 		redis_connection = get_redis_conn()
 
+		if queue:
+			queue = [q.strip() for q in queue.split(",")]
+
 	if os.environ.get("CI"):
 		setup_loghandlers("ERROR")
 
@@ -199,7 +202,11 @@ def start_worker(queue=None, quiet=False):
 		logging_level = "INFO"
 		if quiet:
 			logging_level = "WARNING"
-		Worker(queues, name=get_worker_name(queue)).work(logging_level=logging_level)
+		Worker(queues, name=get_worker_name(queue)).work(
+			logging_level=logging_level,
+			date_format="%Y-%m-%d %H:%M:%S",
+			log_format="%(asctime)s,%(msecs)03d %(message)s",
+		)
 
 
 def get_worker_name(queue):
