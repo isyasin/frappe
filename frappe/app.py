@@ -262,11 +262,11 @@ def set_cors_headers(response):
 	response.headers.extend(cors_headers)
 
 
-def make_form_dict(request):
+def make_form_dict(request: Request):
 	import json
 
 	request_data = request.get_data(as_text=True)
-	if "application/json" in (request.content_type or "") and request_data:
+	if request_data and request.is_json:
 		args = json.loads(request_data)
 	else:
 		args = {}
@@ -278,9 +278,8 @@ def make_form_dict(request):
 
 	frappe.local.form_dict = frappe._dict(args)
 
-	if "_" in frappe.local.form_dict:
-		# _ is passed by $.ajax so that the request is not cached by the browser. So, remove _ from form_dict
-		frappe.local.form_dict.pop("_")
+	# _ is passed by $.ajax so that the request is not cached by the browser. So, remove _ from form_dict
+	frappe.local.form_dict.pop("_", None)
 
 
 def handle_exception(e):
@@ -417,7 +416,7 @@ def serve(
 		application = StaticDataMiddleware(application, {"/files": str(os.path.abspath(sites_path))})
 
 	application.debug = True
-	application.config = {"SERVER_NAME": "127.0.0.1:8000"}
+	application.config = {"SERVER_NAME": "localhost:8000"}
 
 	log = logging.getLogger("werkzeug")
 	log.propagate = False
