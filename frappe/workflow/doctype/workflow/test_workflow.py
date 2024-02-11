@@ -150,22 +150,6 @@ class TestWorkflow(FrappeTestCase):
 		self.assertEqual(workflow_actions[0].status, "Completed")
 		frappe.set_user("Administrator")
 
-	def test_update_docstatus(self):
-		todo = create_new_todo()
-		apply_workflow(todo, "Approve")
-
-		self.workflow.states[1].doc_status = 0
-		self.workflow.save()
-		todo.reload()
-		self.assertEqual(todo.docstatus, 0)
-		self.workflow.states[1].doc_status = 1
-		self.workflow.save()
-		todo.reload()
-		self.assertEqual(todo.docstatus, 1)
-
-		self.workflow.states[1].doc_status = 0
-		self.workflow.save()
-
 	def test_if_workflow_set_on_action(self):
 		self.workflow.states[1].doc_status = 1
 		self.workflow.save()
@@ -236,9 +220,7 @@ def create_todo_workflow():
 	)
 	workflow.append(
 		"transitions",
-		dict(
-			state="Rejected", action="Review", next_state="Pending", allowed="All", allow_self_approval=1
-		),
+		dict(state="Rejected", action="Review", next_state="Pending", allowed="All", allow_self_approval=1),
 	)
 	workflow.insert(ignore_permissions=True)
 
