@@ -84,7 +84,6 @@ class TestPerformance(FrappeTestCase):
 			)
 
 	def test_controller_caching(self):
-
 		get_controller("User")
 		with self.assertQueryCount(0):
 			get_controller("User")
@@ -193,3 +192,7 @@ class TestPerformance(FrappeTestCase):
 			result = frappe.db.sql(query, **kwargs)
 			self.assertEqual(sys.getrefcount(result), 2)  # Note: This always returns +1
 			self.assertFalse(gc.get_referrers(result))
+
+	def test_no_cyclic_references(self):
+		doc = frappe.get_doc("User", "Administrator")
+		self.assertEqual(sys.getrefcount(doc), 2)  # Note: This always returns +1

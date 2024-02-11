@@ -182,9 +182,7 @@ class Meta(Document):
 		return self._dynamic_link_fields
 
 	def get_select_fields(self):
-		return self.get(
-			"fields", {"fieldtype": "Select", "options": ["not in", ["[Select]", "Loading..."]]}
-		)
+		return self.get("fields", {"fieldtype": "Select", "options": ["not in", ["[Select]", "Loading..."]]})
 
 	def get_image_fields(self):
 		return self.get("fields", {"fieldtype": "Attach Image"})
@@ -535,7 +533,9 @@ class Meta(Document):
 	def get_fieldnames_with_value(self, with_field_meta=False, with_virtual_fields=False):
 		def is_value_field(docfield):
 			return not (
-				not with_virtual_fields and docfield.get("is_virtual") or docfield.fieldtype in no_value_fields
+				not with_virtual_fields
+				and docfield.get("is_virtual")
+				or docfield.fieldtype in no_value_fields
 			)
 
 		if with_field_meta:
@@ -594,6 +594,10 @@ class Meta(Document):
 		permlevel_access = set(
 			self.get_permlevel_access(permission_type=permission_type, parenttype=parenttype, user=user)
 		)
+
+		if 0 not in permlevel_access and permission_type in ("read", "select"):
+			if frappe.share.get_shared(self.name, user, rights=[permission_type], limit=1):
+				permlevel_access.add(0)
 
 		permitted_fieldnames.extend(
 			df.fieldname
@@ -765,7 +769,6 @@ def get_field_currency(df, doc=None):
 			and frappe.local.field_currency.get((doc.doctype, doc.parent), {}).get(df.fieldname)
 		)
 	):
-
 		ref_docname = doc.get("parent") or doc.name
 
 		if ":" in cstr(df.get("options")):
@@ -788,8 +791,7 @@ def get_field_currency(df, doc=None):
 			)
 
 	return frappe.local.field_currency.get((doc.doctype, doc.name), {}).get(df.fieldname) or (
-		doc.get("parent")
-		and frappe.local.field_currency.get((doc.doctype, doc.parent), {}).get(df.fieldname)
+		doc.get("parent") and frappe.local.field_currency.get((doc.doctype, doc.parent), {}).get(df.fieldname)
 	)
 
 
@@ -842,9 +844,7 @@ def trim_tables(doctype=None, dry_run=False, quiet=False):
 			if quiet:
 				continue
 			click.secho(f"Ignoring missing table for DocType: {doctype}", fg="yellow", err=True)
-			click.secho(
-				f"Consider removing record in the DocType table for {doctype}", fg="yellow", err=True
-			)
+			click.secho(f"Consider removing record in the DocType table for {doctype}", fg="yellow", err=True)
 		except Exception as e:
 			if quiet:
 				continue

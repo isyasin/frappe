@@ -26,6 +26,7 @@ class KanbanBoard(Document):
 		private: DF.Check
 		reference_doctype: DF.Link
 		show_labels: DF.Check
+
 	# end: auto-generated types
 	def validate(self):
 		self.validate_column_name()
@@ -130,9 +131,7 @@ def update_order(board_name, order):
 
 
 @frappe.whitelist()
-def update_order_for_single_card(
-	board_name, docname, from_colname, to_colname, old_index, new_index
-):
+def update_order_for_single_card(board_name, docname, from_colname, to_colname, old_index, new_index):
 	"""Save the order of cards in columns"""
 	board = frappe.get_doc("Kanban Board", board_name)
 	doctype = board.reference_doctype
@@ -238,7 +237,7 @@ def update_column_order(board_name, order):
 	new_columns = []
 
 	for col in order:
-		for column in old_columns:
+		for column in list(old_columns):
 			if col == column.column_name:
 				new_columns.append(column)
 				old_columns.remove(column)
