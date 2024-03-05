@@ -3,6 +3,7 @@
 
 import base64
 import datetime
+import hashlib
 import json
 import math
 import operator
@@ -23,8 +24,8 @@ import frappe
 from frappe.desk.utils import slug
 from frappe.utils.deprecations import deprecation_warning
 
-DateTimeLikeObject = Union[str, datetime.date, datetime.datetime]
-NumericType = Union[int, float]
+DateTimeLikeObject = str | datetime.date | datetime.datetime
+NumericType = int | float
 
 
 if typing.TYPE_CHECKING:
@@ -109,10 +110,10 @@ def get_datetime(
 	if datetime_str is None:
 		return now_datetime()
 
-	if isinstance(datetime_str, (datetime.datetime, datetime.timedelta)):
+	if isinstance(datetime_str, datetime.datetime | datetime.timedelta):
 		return datetime_str
 
-	elif isinstance(datetime_str, (list, tuple)):
+	elif isinstance(datetime_str, list | tuple):
 		return datetime.datetime(datetime_str)
 
 	elif isinstance(datetime_str, datetime.date):
@@ -127,12 +128,13 @@ def get_datetime(
 		return parser.parse(datetime_str)
 
 
-def get_timedelta(time: str | None = None) -> datetime.timedelta | None:
-	"""Return `datetime.timedelta` object from string value of a
-	valid time format. Returns None if `time` is not a valid format
+def get_timedelta(time: str | datetime.timedelta | None = None) -> datetime.timedelta | None:
+	"""Return `datetime.timedelta` object from string value of a valid time format.
+
+	Return None if `time` is not a valid format.
 
 	Args:
-	        time (str): A valid time representation. This string is parsed
+	        time (str | datetime.timedelta): A valid time representation. This string is parsed
 	        using `dateutil.parser.parse`. Examples of valid inputs are:
 	        '0:0:0', '17:21:00', '2012-01-19 17:21:00'. Checkout
 	        https://dateutil.readthedocs.io/en/stable/parser.html#dateutil.parser.parse
@@ -140,6 +142,9 @@ def get_timedelta(time: str | None = None) -> datetime.timedelta | None:
 	Returns:
 	        datetime.timedelta: Timedelta object equivalent of the passed `time` string
 	"""
+	if isinstance(time, datetime.timedelta):
+		return time
+
 	time = time or "0:0:0"
 
 	try:
@@ -1167,7 +1172,7 @@ def encode(obj, encoding="utf-8"):
 
 def parse_val(v):
 	"""Converts to simple datatypes from SQL query results"""
-	if isinstance(v, (datetime.date, datetime.datetime)):
+	if isinstance(v, datetime.date | datetime.datetime):
 		v = str(v)
 	elif isinstance(v, datetime.timedelta):
 		v = ":".join(str(v).split(":")[:2])
@@ -1540,7 +1545,7 @@ def comma_and(some_list, add_quotes=True):
 
 
 def comma_sep(some_list, pattern, add_quotes=True):
-	if isinstance(some_list, (list, tuple)):
+	if isinstance(some_list, list | tuple):
 		# list(some_list) is done to preserve the existing list
 		some_list = [str(s) for s in list(some_list)]
 		if not some_list:
@@ -1555,7 +1560,7 @@ def comma_sep(some_list, pattern, add_quotes=True):
 
 
 def new_line_sep(some_list):
-	if isinstance(some_list, (list, tuple)):
+	if isinstance(some_list, list | tuple):
 		# list(some_list) is done to preserve the existing list
 		some_list = [str(s) for s in list(some_list)]
 		if not some_list:
@@ -1735,7 +1740,7 @@ def evaluate_filters(doc, filters: dict | list | tuple):
 			if not compare(doc.get(f.fieldname), f.operator, f.value, f.fieldtype):
 				return False
 
-	elif isinstance(filters, (list, tuple)):
+	elif isinstance(filters, list | tuple):
 		for d in filters:
 			f = get_filter(None, d)
 			if not compare(doc.get(f.fieldname), f.operator, f.value, f.fieldtype):
@@ -1772,7 +1777,7 @@ def get_filter(doctype: str, f: dict | list | tuple, filters_config=None) -> "fr
 		key, value = next(iter(f.items()))
 		f = make_filter_tuple(doctype, key, value)
 
-	if not isinstance(f, (list, tuple)):
+	if not isinstance(f, list | tuple):
 		frappe.throw(frappe._("Filter must be a tuple or list (in a list)"))
 
 	if len(f) == 3:
@@ -1845,7 +1850,7 @@ def get_filter(doctype: str, f: dict | list | tuple, filters_config=None) -> "fr
 
 def make_filter_tuple(doctype, key, value):
 	"""return a filter tuple like [doctype, key, operator, value]"""
-	if isinstance(value, (list, tuple)):
+	if isinstance(value, list | tuple):
 		return [doctype, key, value[0], value[1]]
 	else:
 		return [doctype, key, "=", value]
@@ -2011,6 +2016,13 @@ def is_subset(list_a: list, list_b: list) -> bool:
 
 def generate_hash(*args, **kwargs) -> str:
 	return frappe.generate_hash(*args, **kwargs)
+
+
+def sha256_hash(input: str | bytes) -> str:
+	"""Return hash of the string using sha256 algorithm."""
+	if isinstance(input, str):
+		input = input.encode()
+	return hashlib.sha256(input).hexdigest()
 
 
 def dict_with_keys(dict, keys):
@@ -2190,7 +2202,7 @@ def parse_timedelta(s: str) -> datetime.timedelta:
 	return datetime.timedelta(**{key: float(val) for key, val in m.groupdict().items()})
 
 
-def get_job_name(key: str, doctype: str = None, doc_name: str = None) -> str:
+def get_job_name(key: str, doctype: str | None = None, doc_name: str | None = None) -> str:
 	job_name = key
 	if doctype:
 		job_name += f"_{doctype}"

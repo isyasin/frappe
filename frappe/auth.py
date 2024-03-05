@@ -2,14 +2,15 @@
 # MIT License. See LICENSE
 from urllib.parse import quote
 
+from werkzeug.wrappers import Response
+
 import frappe
 import frappe.database
 import frappe.utils
 import frappe.utils.user
 from frappe import _
 from frappe.core.doctype.activity_log.activity_log import add_authentication_log
-from frappe.modules.patch_handler import check_session_stopped
-from frappe.sessions import Session, clear_sessions, delete_session
+from frappe.sessions import Session, clear_sessions, delete_session, get_expiry_in_seconds
 from frappe.translate import get_language
 from frappe.twofactor import (
 	authenticate_for_2factor,
@@ -222,7 +223,7 @@ class LoginManager:
 
 		clear_sessions(frappe.session.user, keep_current=True)
 
-	def authenticate(self, user: str = None, pwd: str = None):
+	def authenticate(self, user: str | None = None, pwd: str | None = None):
 		from frappe.core.doctype.user.user import User
 
 		if not (user and pwd):
@@ -351,14 +352,21 @@ class CookieManager:
 		if not frappe.local.session.get("sid"):
 			return
 
-		# sid expires in 3 days
-		expires = datetime.datetime.now() + datetime.timedelta(days=3)
 		if frappe.session.sid:
-			self.set_cookie("sid", frappe.session.sid, expires=expires, httponly=True)
+			self.set_cookie("sid", frappe.session.sid, max_age=get_expiry_in_seconds(), httponly=True)
 		if frappe.session.session_country:
 			self.set_cookie("country", frappe.session.session_country)
 
-	def set_cookie(self, key, value, expires=None, secure=False, httponly=False, samesite="Lax"):
+	def set_cookie(
+		self,
+		key,
+		value,
+		expires=None,
+		secure=False,
+		httponly=False,
+		samesite="Lax",
+		max_age=None,
+	):
 		if not secure and hasattr(frappe.local, "request"):
 			secure = frappe.local.request.scheme == "https"
 
@@ -372,15 +380,16 @@ class CookieManager:
 			"secure": secure,
 			"httponly": httponly,
 			"samesite": samesite,
+			"max_age": max_age,
 		}
 
 	def delete_cookie(self, to_delete):
-		if not isinstance(to_delete, (list, tuple)):
+		if not isinstance(to_delete, list | tuple):
 			to_delete = [to_delete]
 
 		self.to_delete.extend(to_delete)
 
-	def flush_cookies(self, response):
+	def flush_cookies(self, response: Response):
 		for key, opts in self.cookies.items():
 			response.set_cookie(
 				key,
@@ -389,6 +398,7 @@ class CookieManager:
 				secure=opts.get("secure"),
 				httponly=opts.get("httponly"),
 				samesite=opts.get("samesite"),
+				max_age=opts.get("max_age"),
 			)
 
 		# expires yesterday!
@@ -481,7 +491,7 @@ class LoginAttemptTracker:
 		max_consecutive_login_attempts: int = 3,
 		lock_interval: int = 5 * 60,
 		*,
-		user_name: str = None,
+		user_name: str | None = None,
 	):
 		"""Initialize the tracker.
 

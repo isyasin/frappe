@@ -58,7 +58,7 @@ class EmailQueue(Document):
 		return duplicate
 
 	@classmethod
-	def new(cls, doc_data, ignore_permissions=False):
+	def new(cls, doc_data, ignore_permissions=False) -> "EmailQueue":
 		data = doc_data.copy()
 		if not data.get("recipients"):
 			return
@@ -71,7 +71,7 @@ class EmailQueue(Document):
 		return doc
 
 	@classmethod
-	def find(cls, name):
+	def find(cls, name) -> "EmailQueue":
 		return frappe.get_doc(cls.DOCTYPE, name)
 
 	@classmethod
@@ -139,7 +139,7 @@ class EmailQueue(Document):
 				if method := get_hook_method("override_email_send"):
 					method(self, self.sender, recipient.recipient, message)
 				else:
-					if not frappe.flags.in_test:
+					if not frappe.flags.in_test or frappe.flags.testing_email:
 						ctx.smtp_server.session.sendmail(
 							from_addr=self.sender,
 							to_addrs=recipient.recipient,
@@ -148,7 +148,7 @@ class EmailQueue(Document):
 
 				ctx.update_recipient_status_to_sent(recipient)
 
-			if frappe.flags.in_test:
+			if frappe.flags.in_test and not frappe.flags.testing_email:
 				frappe.flags.sent_mail = message
 				return
 
@@ -683,7 +683,7 @@ class QueueBuilder:
 		# This re-uses smtp server instance to minimize the cost of new session creation
 		smtp_server_instance = None
 		for r in final_recipients:
-			recipients = list(set([r] + self.final_cc() + self.bcc))
+			recipients = list(set([r, *self.final_cc(), *self.bcc]))
 			q = EmailQueue.new({**queue_data, **{"recipients": recipients}}, ignore_permissions=True)
 			if not smtp_server_instance:
 				email_account = q.get_email_account(raise_error=True)

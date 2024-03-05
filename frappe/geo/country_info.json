@@ -2650,6 +2650,9 @@
   "currency": "TZS",
   "currency_name": "Tanzanian Shilling",
   "number_format": "#,###.##",
+  "timezones": [
+    "Africa/Dar_es_Salaam"
+  ],
   "isd": "+255"
  },
  "Thailand": {

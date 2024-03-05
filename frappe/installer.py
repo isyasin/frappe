@@ -210,7 +210,7 @@ def fetch_details_from_tag(_tag: str) -> tuple[str, str, str]:
 	try:
 		repo, tag = app_tag
 	except ValueError:
-		repo, tag = app_tag + [None]
+		repo, tag = [*app_tag, None]
 
 	try:
 		org, repo = org_repo
@@ -264,7 +264,7 @@ def install_app(name, verbose=False, set_as_patched=True, force=False):
 	if app_hooks.required_apps:
 		for app in app_hooks.required_apps:
 			required_app = parse_app_name(app)
-			install_app(required_app, verbose=verbose, force=force)
+			install_app(required_app, verbose=verbose)
 
 	frappe.flags.in_install = name
 	frappe.clear_cache()
@@ -770,8 +770,6 @@ def is_downgrade(sql_file_path, verbose=False):
 
 	from semantic_version import Version
 
-	head = "INSERT INTO `tabInstalled Application` VALUES"
-
 	with open(sql_file_path) as f:
 		header = f.readline()
 		# Example first line:
@@ -812,7 +810,7 @@ def partial_restore(sql_file_path, verbose=False):
 			" partial restore operation for PostreSQL databases",
 			fg="yellow",
 		)
-		warnings.warn(warn)
+		warnings.warn(warn, stacklevel=1)
 
 	import_db_from_sql(source_sql=sql_file, verbose=verbose)
 

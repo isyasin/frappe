@@ -49,6 +49,7 @@ from frappe.utils.data import (
 	now_datetime,
 	nowtime,
 	rounded,
+	sha256_hash,
 	validate_python_code,
 )
 from frappe.utils.dateutils import get_dates_from_timegrain
@@ -383,7 +384,7 @@ class TestPythonExpressions(FrappeTestCase):
 			try:
 				validate_python_code(expr)
 			except Exception as e:
-				self.fail(f"Invalid error thrown for valid expression: {expr}: {str(e)}")
+				self.fail(f"Invalid error thrown for valid expression: {expr}: {e!s}")
 
 	def test_validation_for_bad_python_expression(self):
 		invalid_expressions = [
@@ -482,6 +483,7 @@ class TestDateUtils(FrappeTestCase):
 		self.assertIsInstance(get_timedelta(str(datetime_input)), timedelta)
 		self.assertIsInstance(get_timedelta(str(timedelta_input)), timedelta)
 		self.assertIsInstance(get_timedelta(str(time_input)), timedelta)
+		self.assertIsInstance(get_timedelta(get_timedelta("100:2:12")), timedelta)
 
 	def test_date_from_timegrain(self):
 		start_date = getdate("2021-01-01")
@@ -544,7 +546,7 @@ class TestResponse(FrappeTestCase):
 
 		self.assertTrue(all([isinstance(x, str) for x in processed_object["time_types"]]))
 		self.assertTrue(all([isinstance(x, float) for x in processed_object["float"]]))
-		self.assertTrue(all([isinstance(x, (list, str)) for x in processed_object["iter"]]))
+		self.assertTrue(all([isinstance(x, list | str) for x in processed_object["iter"]]))
 		self.assertIsInstance(processed_object["string"], str)
 		with self.assertRaises(TypeError):
 			json.dumps(BAD_OBJECT, default=json_handler)
@@ -755,9 +757,9 @@ class TestMiscUtils(FrappeTestCase):
 class TestTBSanitization(FrappeTestCase):
 	def test_traceback_sanitzation(self):
 		try:
-			password = "42"
+			password = "42"  # noqa: F841
 			args = {"password": "42", "pwd": "42", "safe": "safe_value"}
-			args = frappe._dict({"password": "42", "pwd": "42", "safe": "safe_value"})
+			args = frappe._dict({"password": "42", "pwd": "42", "safe": "safe_value"})  # noqa: F841
 			raise Exception
 		except Exception:
 			traceback = frappe.get_traceback(with_context=True)
@@ -914,3 +916,12 @@ class TestRounding(FrappeTestCase):
 	@given(st.decimals(min_value=-1e8, max_value=1e8), st.integers(min_value=-2, max_value=4))
 	def test_bankers_rounding_property(self, number, precision):
 		self.assertEqual(Decimal(str(flt(float(number), precision))), round(number, precision))
+
+
+class TestCrypto(FrappeTestCase):
+	def test_hashing(self):
+		self.assertEqual(sha256_hash(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		self.assertEqual(
+			sha256_hash(b"The quick brown fox jumps over the lazy dog"),
+			"d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592",
+		)
