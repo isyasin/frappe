@@ -472,7 +472,9 @@ class DatabaseQuery:
 
 				if table_name.lower().startswith("group_concat("):
 					table_name = table_name[13:]
-				if not table_name[0] == "`":
+				if table_name.lower().startswith("distinct"):
+					table_name = table_name[8:].strip()
+				if table_name[0] != "`":
 					table_name = f"`{table_name}`"
 				if (
 					table_name not in self.query_tables
@@ -642,7 +644,7 @@ class DatabaseQuery:
 				# field: 'distinct name'
 				# column: 'name'
 				else:
-					column = field.split(" ", 2)[1].replace("`", "")
+					column = field.split(" ", 1)[1].replace("`", "")
 			else:
 				# field: 'count(`tabPhoto`.name) as total_count'
 				# column: 'tabPhoto.name'
@@ -1076,11 +1078,6 @@ class DatabaseQuery:
 						args.order_by = (
 							f"`tab{self.doctype}`.`{sort_field or 'modified'}` {sort_order or 'desc'}"
 						)
-
-				# draft docs always on top
-				if hasattr(self.doctype_meta, "is_submittable") and self.doctype_meta.is_submittable:
-					if self.order_by:
-						args.order_by = f"`tab{self.doctype}`.docstatus asc, {args.order_by}"
 
 	def validate_order_by_and_group_by(self, parameters: str):
 		"""Check order by, group by so that atleast one column is selected and does not have subquery"""
