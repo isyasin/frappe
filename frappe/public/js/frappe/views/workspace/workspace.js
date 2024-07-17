@@ -68,6 +68,7 @@ frappe.views.Workspace = class Workspace {
 		this.cached_pages = $.extend(true, {}, this.sidebar_pages);
 		this.all_pages = this.sidebar_pages.pages;
 		this.has_access = this.sidebar_pages.has_access;
+		this.has_create_access = this.sidebar_pages.has_create_access;
 
 		this.all_pages.forEach((page) => {
 			page.is_editable = !page.public || this.has_access;
@@ -161,19 +162,24 @@ frappe.views.Workspace = class Workspace {
 			`<div class="standard-sidebar-section nested-container" data-title="${title}"></div>`
 		);
 
-		let $title = $(`<div class="standard-sidebar-label">
+		let $title = $(`<button class="btn-reset standard-sidebar-label">
 			<span>${frappe.utils.icon("es-line-down", "xs")}</span>
 			<span class="section-title">${__(title)}<span>
 		</div>`).appendTo(sidebar_section);
+		$title.attr({
+			"aria-label": __("{0}: {1}", [__("Toggle Section"), __(title)]),
+			"aria-expanded": "true",
+		});
 		this.prepare_sidebar(root_pages, sidebar_section, this.sidebar);
 
 		$title.on("click", (e) => {
-			let icon =
-				$(e.target).find("span use").attr("href") === "#es-line-down"
-					? "#es-line-right-chevron"
-					: "#es-line-down";
-			$(e.target).find("span use").attr("href", icon);
-			$(e.target).parent().find(".sidebar-item-container").toggleClass("hidden");
+			const $e = $(e.target);
+			const href = $e.find("span use").attr("href");
+			const isCollapsed = href === "#es-line-down";
+			let icon = isCollapsed ? "#es-line-right-chevron" : "#es-line-down";
+			$e.find("span use").attr("href", icon);
+			$e.parent().find(".sidebar-item-container").toggleClass("hidden");
+			$e.attr("aria-expanded", String(!isCollapsed));
 		});
 
 		if (Object.keys(root_pages).length === 0) {
@@ -242,9 +248,9 @@ frappe.views.Workspace = class Workspace {
 		}
 
 		let $child_item_section = item_container.find(".sidebar-child-item");
-		let $drop_icon = $(
-			`<span class="drop-icon hidden">${frappe.utils.icon(drop_icon, "sm")}</span>`
-		).appendTo(sidebar_control);
+		let $drop_icon = $(`<button class="btn-reset drop-icon hidden">`)
+			.html(frappe.utils.icon(drop_icon, "sm"))
+			.appendTo(sidebar_control);
 		let pages = item.public ? this.public_pages : this.private_pages;
 		if (
 			pages.some(
@@ -346,7 +352,12 @@ frappe.views.Workspace = class Workspace {
 	get_page_to_show() {
 		let default_page;
 
-		if (
+		if (frappe.boot.user.default_workspace) {
+			default_page = {
+				name: frappe.boot.user.default_workspace.title,
+				public: frappe.boot.user.default_workspace.public,
+			};
+		} else if (
 			localStorage.current_page &&
 			this.all_pages.filter((page) => page.title == localStorage.current_page).length != 0
 		) {
@@ -463,9 +474,10 @@ frappe.views.Workspace = class Workspace {
 			"es-line-edit"
 		);
 		// need to add option for icons in inner buttons as well
-		this.page.add_inner_button(__("Create Workspace"), () => {
-			this.initialize_new_page();
-		});
+		if (this.has_create_access)
+			this.page.add_inner_button(__("Create Workspace"), () => {
+				this.initialize_new_page(true);
+			});
 	}
 
 	initialize_editorjs_undo() {

@@ -129,9 +129,7 @@ def set_route(context):
 	elif context.doc and getattr(context.doc, "route", None):
 		context.route = context.doc.route
 	else:
-		context.route = "{}/{}".format(
-			context.pathname or quoted(context.doc.doctype), quoted(context.doc.name)
-		)
+		context.route = f"{context.pathname or quoted(context.doc.doctype)}/{quoted(context.doc.name)}"
 
 
 def prepare_filters(doctype, controller, kwargs):
@@ -145,6 +143,8 @@ def prepare_filters(doctype, controller, kwargs):
 
 	if hasattr(controller, "website") and controller.website.get("condition_field"):
 		filters[controller.website["condition_field"]] = 1
+	elif meta.is_published_field:
+		filters[meta.is_published_field] = 1
 
 	if filters.pathname:
 		# resolve additional filters from path
@@ -154,7 +154,7 @@ def prepare_filters(doctype, controller, kwargs):
 				filters[key] = val
 
 	# filter the filters to include valid fields only
-	for fieldname, val in list(filters.items()):
+	for fieldname in list(filters.keys()):
 		if not meta.has_field(fieldname):
 			del filters[fieldname]
 

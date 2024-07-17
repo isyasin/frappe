@@ -46,10 +46,15 @@ from frappe.utils import (
 	validate_phone_number_with_country_code,
 	validate_url,
 )
+from frappe.utils.change_log import (
+	get_source_url,
+	parse_github_url,
+)
 from frappe.utils.data import (
 	add_to_date,
 	add_years,
 	cast,
+	cint,
 	cstr,
 	duration_to_seconds,
 	expand_relative_urls,
@@ -64,6 +69,7 @@ from frappe.utils.data import (
 	nowtime,
 	pretty_date,
 	rounded,
+	sha256_hash,
 	to_timedelta,
 	validate_python_code,
 )
@@ -174,8 +180,15 @@ class TestFilters(FrappeTestCase):
 			)
 		)
 
-	def test_like_not_like(self):
-		doc = {"doctype": "User", "username": "test_abc", "prefix": "startswith", "suffix": "endswith"}
+	def test_filter_evaluation(self):
+		doc = {
+			"doctype": "User",
+			"username": "test_abc",
+			"prefix": "startswith",
+			"suffix": "endswith",
+			"empty": None,
+			"number": 0,
+		}
 
 		test_cases = [
 			([["username", "like", "test"]], True),
@@ -186,10 +199,15 @@ class TestFilters(FrappeTestCase):
 			([["prefix", "not like", "end%"]], True),
 			([["suffix", "like", "%with"]], True),
 			([["suffix", "not like", "%end"]], True),
+			([["suffix", "is", "set"]], True),
+			([["suffix", "is", "not set"]], False),
+			([["empty", "is", "set"]], False),
+			([["empty", "is", "not set"]], True),
+			([["number", "is", "set"]], True),
 		]
 
 		for filter, expected_result in test_cases:
-			self.assertEqual(evaluate_filters(doc, filter), expected_result)
+			self.assertEqual(evaluate_filters(doc, filter), expected_result, msg=f"{filter}")
 
 
 class TestMoney(FrappeTestCase):
@@ -461,7 +479,7 @@ class TestPythonExpressions(FrappeTestCase):
 			try:
 				validate_python_code(expr)
 			except Exception as e:
-				self.fail(f"Invalid error thrown for valid expression: {expr}: {str(e)}")
+				self.fail(f"Invalid error thrown for valid expression: {expr}: {e!s}")
 
 	def test_validation_for_bad_python_expression(self):
 		invalid_expressions = [
@@ -564,6 +582,7 @@ class TestDateUtils(FrappeTestCase):
 		self.assertIsInstance(get_timedelta(str(datetime_input)), timedelta)
 		self.assertIsInstance(get_timedelta(str(timedelta_input)), timedelta)
 		self.assertIsInstance(get_timedelta(str(time_input)), timedelta)
+		self.assertIsInstance(get_timedelta(get_timedelta("100:2:12")), timedelta)
 
 	def test_to_timedelta(self):
 		self.assertEqual(to_timedelta("00:00:01"), timedelta(seconds=1))
@@ -698,7 +717,7 @@ class TestResponse(FrappeTestCase):
 
 		self.assertTrue(all([isinstance(x, str) for x in processed_object["time_types"]]))
 		self.assertTrue(all([isinstance(x, float) for x in processed_object["float"]]))
-		self.assertTrue(all([isinstance(x, (list, str)) for x in processed_object["iter"]]))
+		self.assertTrue(all([isinstance(x, list | str) for x in processed_object["iter"]]))
 		self.assertIsInstance(processed_object["string"], str)
 		with self.assertRaises(TypeError):
 			json.dumps(BAD_OBJECT, default=json_handler)
@@ -981,16 +1000,25 @@ class TestMiscUtils(FrappeTestCase):
 
 
 class TestTypingValidations(FrappeTestCase):
-	ERR_REGEX = f"^Argument '.*' should be of type '.*' but got '.*' instead.$"
+	ERR_REGEX = "^Argument '.*' should be of type '.*' but got '.*' instead.$"
 
 	def test_validate_whitelisted_api(self):
-		from inspect import signature
+		@frappe.whitelist()
+		def simple(string: str, number: int):
+			return
 
-		whitelisted_fn = next(x for x in frappe.whitelisted if x.__annotations__)
-		bad_params = (object(),) * len(signature(whitelisted_fn).parameters)
+		@frappe.whitelist()
+		def varkw(string: str, **kwargs):
+			return
 
-		with self.assertRaisesRegex(frappe.FrappeTypeError, self.ERR_REGEX):
-			whitelisted_fn(*bad_params)
+		test_cases = [
+			(simple, (object(), object()), {}),
+			(varkw, (object(),), {"xyz": object()}),
+		]
+
+		for fn, args, kwargs in test_cases:
+			with self.assertRaisesRegex(frappe.FrappeTypeError, self.ERR_REGEX):
+				fn(*args, **kwargs)
 
 	def test_validate_whitelisted_doc_method(self):
 		report = frappe.get_last_doc("Report")
@@ -1008,13 +1036,13 @@ class TestTypingValidations(FrappeTestCase):
 class TestTBSanitization(FrappeTestCase):
 	def test_traceback_sanitzation(self):
 		try:
-			password = "42"
-			args = {"password": "42", "pwd": "42", "safe": "safe_value"}
-			args = frappe._dict({"password": "42", "pwd": "42", "safe": "safe_value"})
+			password = frappe.generate_hash()
+			args = {"password": "42", "pwd": password, "safe": "safe_value"}
+			args = frappe._dict({"password": "42", "pwd": password, "safe": "safe_value"})  # noqa: F841
 			raise Exception
 		except Exception:
 			traceback = frappe.get_traceback(with_context=True)
-			self.assertNotIn("42", traceback)
+			self.assertNotIn(password, traceback)
 			self.assertIn("********", traceback)
 			self.assertIn("password =", traceback)
 			self.assertIn("safe_value", traceback)
@@ -1171,8 +1199,17 @@ class TestRounding(FrappeTestCase):
 	def test_default_rounding(self):
 		self.assertEqual(frappe.get_system_settings("rounding_method"), "Banker's Rounding")
 
+	@given(
+		st.floats(min_value=-(2**32) - 1, max_value=2**32 + 1),
+		st.integers(min_value=-(2**63) - 1, max_value=2**63 + 1),
+	)
+	def test_cint(self, floating_point, integer):
+		self.assertEqual(cint(integer), integer)
+		self.assertEqual(cint(str(integer)), integer)
+		self.assertEqual(cint(str(floating_point)), int(floating_point))
 
-class TestTypingValidations(FrappeTestCase):
+
+class TestArgumentTypingValidations(FrappeTestCase):
 	def test_validate_argument_types(self):
 		from frappe.core.doctype.doctype.doctype import DocType
 		from frappe.utils.typing_validations import FrappeTypeError, validate_argument_types
@@ -1211,3 +1248,37 @@ class TestTypingValidations(FrappeTestCase):
 		self.assertEqual(test_doctypes(doctype.as_dict()), doctype.as_dict())
 		with self.assertRaises(FrappeTypeError):
 			test_doctypes("a")
+
+
+class TestChangeLog(FrappeTestCase):
+	def test_get_remote_url(self):
+		self.assertIsInstance(get_source_url("frappe"), str)
+
+	def test_parse_github_url(self):
+		# using erpnext as repo in order to be different from the owner
+		owner, repo = parse_github_url("https://github.com/frappe/erpnext.git")
+		self.assertEqual(owner, "frappe")
+		self.assertEqual(repo, "erpnext")
+
+		owner, repo = parse_github_url("https://github.com/frappe/erpnext")
+		self.assertEqual(owner, "frappe")
+		self.assertEqual(repo, "erpnext")
+
+		owner, repo = parse_github_url("git@github.com:frappe/erpnext.git")
+		self.assertEqual(owner, "frappe")
+		self.assertEqual(repo, "erpnext")
+
+		owner, repo = parse_github_url("https://gitlab.com/gitlab-org/gitlab")
+		self.assertIsNone(owner)
+		self.assertIsNone(repo)
+
+		self.assertRaises(ValueError, parse_github_url, remote_url=None)
+
+
+class TestCrypto(FrappeTestCase):
+	def test_hashing(self):
+		self.assertEqual(sha256_hash(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+		self.assertEqual(
+			sha256_hash(b"The quick brown fox jumps over the lazy dog"),
+			"d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592",
+		)

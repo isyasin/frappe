@@ -1,6 +1,7 @@
 import ast
 import copy
 import inspect
+import io
 import json
 import mimetypes
 import types
@@ -8,7 +9,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 
 import RestrictedPython.Guards
-from RestrictedPython import compile_restricted, safe_globals
+from RestrictedPython import PrintCollector, compile_restricted, safe_globals
 from RestrictedPython.transformer import RestrictingNodeTransformer
 
 import frappe
@@ -59,6 +60,16 @@ class FrappeTransformer(RestrictingNodeTransformer):
 			return
 
 		return super().check_name(node, name, *args, **kwargs)
+
+
+class FrappePrintCollector(PrintCollector):
+	"""Collect written text, and return it when called."""
+
+	def _call_print(self, *objects, **kwargs):
+		output = io.StringIO()
+		print(*objects, file=output, **kwargs)
+		frappe.log(output.getvalue().strip())
+		output.close()
 
 
 def is_safe_exec_enabled() -> bool:
@@ -281,6 +292,9 @@ def get_safe_globals():
 	out._getitem_ = _getitem
 	out._getattr_ = _getattr_for_safe_exec
 
+	# Allow using `print()` calls with `safe_exec()`
+	out._print_ = FrappePrintCollector
+
 	# allow iterators and list comprehension
 	out._getiter_ = iter
 	out._iter_unpack_sequence_ = RestrictedPython.Guards.guarded_iter_unpack_sequence
@@ -478,7 +492,7 @@ def _validate_attribute_read(object, name):
 	if isinstance(name, str) and (name in UNSAFE_ATTRIBUTES):
 		raise SyntaxError(f"{name} is an unsafe attribute")
 
-	if isinstance(object, (types.ModuleType, types.CodeType, types.TracebackType, types.FrameType)):
+	if isinstance(object, types.ModuleType | types.CodeType | types.TracebackType | types.FrameType):
 		raise SyntaxError(f"Reading {object} attributes is not allowed")
 
 	if name.startswith("_"):
@@ -489,16 +503,14 @@ def _write(obj):
 	# guard function for RestrictedPython
 	if isinstance(
 		obj,
-		(
-			types.ModuleType,
-			types.CodeType,
-			types.TracebackType,
-			types.FrameType,
-			type,
-			types.FunctionType,  # covers lambda
-			types.MethodType,
-			types.BuiltinFunctionType,  # covers methods
-		),
+		types.ModuleType
+		| types.CodeType
+		| types.TracebackType
+		| types.FrameType
+		| type
+		| types.FunctionType
+		| types.MethodType
+		| types.BuiltinFunctionType,
 	):
 		raise SyntaxError(f"Not allowed to write to object {obj} of type {type(obj)}")
 	return obj

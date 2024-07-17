@@ -223,7 +223,7 @@ class LoginManager:
 
 		clear_sessions(frappe.session.user, keep_current=True)
 
-	def authenticate(self, user: str = None, pwd: str = None):
+	def authenticate(self, user: str | None = None, pwd: str | None = None):
 		from frappe.core.doctype.user.user import User
 
 		if not (user and pwd):
@@ -328,6 +328,12 @@ class LoginManager:
 		self.user = user
 		self.post_login()
 
+	def impersonate(self, user):
+		current_user = frappe.session.user
+		self.login_as(user)
+		# Flag this session as impersonated session, so other code can log this.
+		frappe.local.session_obj.set_impersonsated(current_user)
+
 	def logout(self, arg="", user=None):
 		if not user:
 			user = frappe.session.user
@@ -336,6 +342,8 @@ class LoginManager:
 		if user == frappe.session.user:
 			delete_session(frappe.session.sid, user=user, reason="User Manually Logged Out")
 			self.clear_cookies()
+			if frappe.request:
+				self.login_as_guest()
 		else:
 			clear_sessions(user)
 
@@ -378,7 +386,7 @@ class CookieManager:
 		}
 
 	def delete_cookie(self, to_delete):
-		if not isinstance(to_delete, (list, tuple)):
+		if not isinstance(to_delete, list | tuple):
 			to_delete = [to_delete]
 
 		self.to_delete.extend(to_delete)
@@ -413,7 +421,18 @@ def clear_cookies():
 
 
 def validate_ip_address(user):
-	"""check if IP Address is valid"""
+	"""
+	Method to check if the user has IP restrictions enabled, and if so is the IP address they are
+	connecting from allowlisted.
+
+	Certain methods called from our socketio backend need direct access, and so the IP is not
+	checked for those
+	"""
+	if hasattr(frappe.local, "request") and frappe.local.request.path.startswith(
+		"/api/method/frappe.realtime."
+	):
+		return True
+
 	from frappe.core.doctype.user.user import get_restricted_ip_list
 
 	# Only fetch required fields - for perf
@@ -485,7 +504,7 @@ class LoginAttemptTracker:
 		max_consecutive_login_attempts: int = 3,
 		lock_interval: int = 5 * 60,
 		*,
-		user_name: str = None,
+		user_name: str | None = None,
 	):
 		"""Initialize the tracker.
 

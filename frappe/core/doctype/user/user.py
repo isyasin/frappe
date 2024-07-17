@@ -30,6 +30,7 @@ from frappe.utils import (
 	now_datetime,
 	today,
 )
+from frappe.utils.data import sha256_hash
 from frappe.utils.deprecations import deprecated
 from frappe.utils.password import check_password, get_password_reset_limit
 from frappe.utils.password import update_password as _update_password
@@ -59,6 +60,7 @@ class User(Document):
 		birth_date: DF.Date | None
 		block_modules: DF.Table[BlockModule]
 		bypass_restrict_ip_check_if_2fa_enabled: DF.Check
+		default_workspace: DF.Link | None
 		defaults: DF.Table[DefaultValue]
 		desk_theme: DF.Literal["Light", "Dark", "Automatic"]
 		document_follow_frequency: DF.Literal["Hourly", "Daily", "Weekly"]
@@ -149,7 +151,7 @@ class User(Document):
 			self.password_strength_test()
 
 		if self.name not in STANDARD_USERS:
-			self.validate_email_type(self.email)
+			self.email = self.name
 			self.validate_email_type(self.name)
 		self.add_system_manager_role()
 		self.populate_role_profile_roles()
@@ -373,10 +375,11 @@ class User(Document):
 		pass
 
 	def reset_password(self, send_email=False, password_expired=False):
-		from frappe.utils import get_url, random_string
+		from frappe.utils import get_url
 
-		key = random_string(32)
-		self.db_set("reset_password_key", key)
+		key = frappe.generate_hash()
+		hashed_key = sha256_hash(key)
+		self.db_set("reset_password_key", hashed_key)
 		self.db_set("last_reset_password_key_generated_on", now_datetime())
 
 		url = "/update-password?key=" + key
@@ -550,7 +553,29 @@ class User(Document):
 		frappe.db.delete("OAuth Authorization Code", {"user": self.name})
 		frappe.db.delete("Token Cache", {"user": self.name})
 
+		# Delete EPS data
+		frappe.db.delete("Energy Point Log", {"user": self.name})
+
+		# Remove user link from Workflow Action
+		frappe.db.set_value("Workflow Action", {"user": self.name}, "user", None)
+
+		# Delete user's List Filters
+		frappe.db.delete("List Filter", {"for_user": self.name})
+
+		# Remove user from Note's Seen By table
+		seen_notes = frappe.get_all("Note", filters=[["Note Seen By", "user", "=", self.name]], pluck="name")
+		for note_id in seen_notes:
+			note = frappe.get_doc("Note", note_id)
+			for row in note.seen_by:
+				if row.user == self.name:
+					note.remove(row)
+			note.save(ignore_permissions=True)
+
 	def before_rename(self, old_name, new_name, merge=False):
+		# if merging, delete the old user notification settings
+		if merge:
+			frappe.delete_doc("Notification Settings", old_name, ignore_permissions=True)
+
 		frappe.clear_cache(user=old_name)
 		self.validate_rename(old_name, new_name)
 
@@ -573,10 +598,9 @@ class User(Document):
 			has_fields = [d.get("name") for d in desc if d.get("name") in ["owner", "modified_by"]]
 			for field in has_fields:
 				frappe.db.sql(
-					"""UPDATE `%s`
-					SET `%s` = %s
-					WHERE `%s` = %s"""
-					% (tab, field, "%s", field, "%s"),
+					"""UPDATE `{}`
+					SET `{}` = {}
+					WHERE `{}` = {}""".format(tab, field, "%s", field, "%s"),
 					(new_name, old_name),
 				)
 
@@ -619,7 +643,7 @@ class User(Document):
 
 	def ensure_unique_roles(self):
 		exists = []
-		for i, d in enumerate(self.get("roles")):
+		for d in self.get("roles"):
 			if (not d.role) or (d.role in exists):
 				self.get("roles").remove(d)
 			else:
@@ -803,9 +827,9 @@ def get_perm_info(role):
 	return get_all_perms(role)
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def update_password(
-	new_password: str, logout_all_sessions: int = 0, key: str = None, old_password: str = None
+	new_password: str, logout_all_sessions: int = 0, key: str | None = None, old_password: str | None = None
 ):
 	"""Update password for the current user.
 
@@ -886,6 +910,7 @@ def test_password_strength(new_password: str, key=None, old_password=None, user_
 			password_policy_validation_passed = True
 
 		result["feedback"]["password_policy_validation_passed"] = password_policy_validation_passed
+		result.pop("password", None)
 		return result
 
 
@@ -917,8 +942,9 @@ def _get_user_for_update_password(key, old_password):
 	# verify old password
 	result = frappe._dict()
 	if key:
+		hashed_key = sha256_hash(key)
 		user = frappe.db.get_value(
-			"User", {"reset_password_key": key}, ["name", "last_reset_password_key_generated_on"]
+			"User", {"reset_password_key": hashed_key}, ["name", "last_reset_password_key_generated_on"]
 		)
 		result.user, last_reset_password_key_generated_on = user or (None, None)
 		if result.user:
@@ -951,7 +977,7 @@ def reset_user_data(user):
 	return user_doc, redirect_url
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def verify_password(password):
 	frappe.local.login_manager.check_password(frappe.session.user, password)
 
@@ -1007,14 +1033,13 @@ def sign_up(email: str, full_name: str, redirect_to: str) -> tuple[int, str]:
 			return 2, _("Please ask your administrator to verify your sign-up")
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 @rate_limit(limit=get_password_reset_limit, seconds=60 * 60)
 def reset_password(user: str) -> str:
-	if user == "Administrator":
-		return "not allowed"
-
 	try:
 		user: User = frappe.get_doc("User", user)
+		if user.name == "Administrator":
+			return "not allowed"
 		if not user.enabled:
 			return "disabled"
 
@@ -1176,7 +1201,7 @@ def handle_password_test_fail(feedback: dict):
 	suggestions = feedback.get("suggestions", [])
 	warning = feedback.get("warning", "")
 
-	frappe.throw(msg=" ".join([warning] + suggestions), title=_("Invalid Password"))
+	frappe.throw(msg=" ".join([warning, *suggestions]), title=_("Invalid Password"))
 
 
 def update_gravatar(name):
@@ -1278,7 +1303,7 @@ def get_restricted_ip_list(user):
 	return [i.strip() for i in user.restrict_ip.split(",")]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def generate_keys(user: str):
 	"""
 	generate api key and api secret
@@ -1310,3 +1335,31 @@ def get_enabled_users():
 		return enabled_users
 
 	return frappe.cache.get_value("enabled_users", _get_enabled_users)
+
+
+@frappe.whitelist(methods=["POST"])
+def impersonate(user: str, reason: str):
+	# Note: For now we only allow admins, we MIGHT allow system manager in future.
+	# All the impersonation code doesn't assume anything about user.
+	frappe.only_for("Administrator")
+
+	impersonator = frappe.session.user
+	frappe.get_doc(
+		{
+			"doctype": "Activity Log",
+			"user": user,
+			"status": "Success",
+			"subject": _("User {0} impersonated as {1}").format(impersonator, user),
+			"operation": "Impersonate",
+		}
+	).insert(ignore_permissions=True, ignore_links=True)
+
+	notification = frappe.new_doc(
+		"Notification Log",
+		for_user=user,
+		from_user=frappe.session.user,
+		subject=_("{0} just impersonated as you. They gave this reason: {1}").format(impersonator, reason),
+	)
+	notification.set("type", "Alert")
+	notification.insert(ignore_permissions=True)
+	frappe.local.login_manager.impersonate(user)

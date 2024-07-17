@@ -10,6 +10,8 @@ be used to build database driven apps.
 
 Read the documentation: https://frappeframework.com/docs
 """
+import copy
+import faulthandler
 import functools
 import gc
 import importlib
@@ -17,6 +19,7 @@ import inspect
 import json
 import os
 import re
+import signal
 import traceback
 import unicodedata
 import warnings
@@ -26,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, TypeAlias, overload
 import click
 from werkzeug.local import Local, release_local
 
+import frappe
 from frappe.query_builder import (
 	get_query,
 	get_query_builder,
@@ -46,7 +50,7 @@ from .utils.jinja import (
 )
 from .utils.lazy_loader import lazy_import
 
-__version__ = "15.13.0"
+__version__ = "15.35.0"
 __title__ = "Frappe Framework"
 
 controllers = {}
@@ -86,7 +90,7 @@ class _dict(dict):
 
 
 def _(msg: str, lang: str | None = None, context: str | None = None) -> str:
-	"""Returns translated string in current lang, if exists.
+	"""Return translated string in current lang, if exists.
 	Usage:
 	        _('Change')
 	        _('Change', context='Coins')
@@ -121,8 +125,61 @@ def _(msg: str, lang: str | None = None, context: str | None = None) -> str:
 	return translated_string or non_translated_string
 
 
-def as_unicode(text: str, encoding: str = "utf-8") -> str:
-	"""Convert to unicode if required"""
+def _lt(msg: str, lang: str | None = None, context: str | None = None):
+	"""Lazily translate a string.
+
+
+	This function returns a "lazy string" which when casted to string via some operation applies
+	translation first before casting.
+
+	This is only useful for translating strings in global scope or anything that potentially runs
+	before `frappe.init()`
+
+	Note: Result is not guaranteed to equivalent to pure strings for all operations.
+	"""
+	return _LazyTranslate(msg, lang, context)
+
+
+@functools.total_ordering
+class _LazyTranslate:
+	__slots__ = ("msg", "lang", "context")
+
+	def __init__(self, msg: str, lang: str | None = None, context: str | None = None) -> None:
+		self.msg = msg
+		self.lang = lang
+		self.context = context
+
+	@property
+	def value(self) -> str:
+		return _(str(self.msg), self.lang, self.context)
+
+	def __str__(self):
+		return self.value
+
+	def __add__(self, other):
+		if isinstance(other, str | _LazyTranslate):
+			return self.value + str(other)
+		raise NotImplementedError
+
+	def __radd__(self, other):
+		if isinstance(other, str | _LazyTranslate):
+			return str(other) + self.value
+		return NotImplementedError
+
+	def __repr__(self) -> str:
+		return f"'{self.value}'"
+
+	# NOTE: it's required to override these methods and raise error as default behaviour will
+	# return `False` in all cases.
+	def __eq__(self, other):
+		raise NotImplementedError
+
+	def __lt__(self, other):
+		raise NotImplementedError
+
+
+def as_unicode(text, encoding: str = "utf-8") -> str:
+	"""Convert to unicode if required."""
 	if isinstance(text, str):
 		return text
 	elif text is None:
@@ -131,16 +188,6 @@ def as_unicode(text: str, encoding: str = "utf-8") -> str:
 		return str(text, encoding)
 	else:
 		return str(text)
-
-
-def get_lang_dict(fortype: str, name: str | None = None) -> dict[str, str]:
-	"""Returns the translated language dict for the given type and name.
-
-	:param fortype: must be one of `doctype`, `page`, `report`, `include`, `jsfile`, `boot`
-	:param name: name of the document for which assets are to be returned."""
-	from frappe.translate import get_dict
-
-	return get_dict(fortype, name)
 
 
 def set_user_lang(user: str, user_language: str | None = None) -> None:
@@ -257,11 +304,13 @@ def init(site: str, sites_path: str = ".", new_site: bool = False, force=False) 
 	local.qb = get_query_builder(local.conf.db_type)
 	local.qb.get_query = get_query
 	setup_redis_cache_connection()
-	setup_module_map()
 
 	if not _qb_patched.get(local.conf.db_type):
 		patch_query_execute()
 		patch_query_aggregation()
+		_register_fault_handler()
+
+	setup_module_map(include_all_apps=not (frappe.request or frappe.job or frappe.flags.in_migrate))
 
 	local.initialised = True
 
@@ -423,9 +472,9 @@ def setup_redis_cache_connection():
 	global cache
 
 	if not cache:
-		from frappe.utils.redis_wrapper import RedisWrapper
+		from frappe.utils.redis_wrapper import setup_cache
 
-		cache = RedisWrapper.from_url(conf.get("redis_cache"))
+		cache = setup_cache()
 
 
 def get_traceback(with_context: bool = False) -> str:
@@ -440,7 +489,7 @@ def errprint(msg: str) -> None:
 
 	:param msg: Message."""
 	msg = as_unicode(msg)
-	if not request or (not "cmd" in local.form_dict) or conf.developer_mode:
+	if not request or ("cmd" not in local.form_dict) or conf.developer_mode:
 		print(msg)
 
 	error_log.append({"exc": msg})
@@ -451,14 +500,20 @@ def print_sql(enable: bool = True) -> None:
 
 
 def log(msg: str) -> None:
-	"""Add to `debug_log`.
+	"""Add to `debug_log`
 
 	:param msg: Message."""
 	if not request:
-		if conf.get("logging") or False:
-			print(repr(msg))
+		print(repr(msg))
 
 	debug_log.append(as_unicode(msg))
+
+
+@functools.lru_cache(maxsize=1024)
+def _strip_html_tags(message):
+	from frappe.utils import strip_html_tags
+
+	return strip_html_tags(message)
 
 
 def msgprint(
@@ -469,7 +524,7 @@ def msgprint(
 	as_list: bool = False,
 	indicator: Literal["blue", "green", "orange", "red", "yellow"] | None = None,
 	alert: bool = False,
-	primary_action: str = None,
+	primary_action: str | None = None,
 	is_minimizable: bool = False,
 	wide: bool = False,
 	*,
@@ -492,14 +547,8 @@ def msgprint(
 	import inspect
 	import sys
 
-	from frappe.utils import strip_html_tags
-
 	msg = safe_decode(msg)
 	out = _dict(message=msg)
-
-	@functools.lru_cache(maxsize=1024)
-	def _strip_html_tags(message):
-		return strip_html_tags(message)
 
 	def _raise_exception():
 		if raise_exception:
@@ -581,11 +630,18 @@ def throw(
 	is_minimizable: bool = False,
 	wide: bool = False,
 	as_list: bool = False,
+	primary_action=None,
 ) -> None:
 	"""Throw execption and show message (`msgprint`).
 
 	:param msg: Message.
-	:param exc: Exception class. Default `frappe.ValidationError`"""
+	:param exc: Exception class. Default `frappe.ValidationError`
+	:param title: [optional] Message title. Default: "Message".
+	:param is_minimizable: [optional] Allow users to minimize the modal
+	:param wide: [optional] Show wide modal
+	:param as_list: [optional] If `msg` is a list, render as un-ordered list.
+	:param primary_action: [optional] Bind a primary server/client side action.
+	"""
 	msgprint(
 		msg,
 		raise_exception=exc,
@@ -594,6 +650,7 @@ def throw(
 		is_minimizable=is_minimizable,
 		wide=wide,
 		as_list=as_list,
+		primary_action=primary_action,
 	)
 
 
@@ -840,7 +897,7 @@ def is_whitelisted(method):
 		summary = _("You are not permitted to access this resource.")
 		detail = _("Function {0} is not whitelisted.").format(bold(f"{method.__module__}.{method.__name__}"))
 		msg = f"<details><summary>{summary}</summary>{detail}</details>"
-		throw(msg, PermissionError, title="Method Not Allowed")
+		throw(msg, PermissionError, title=_("Method Not Allowed"))
 
 	if is_guest and method not in xss_safe_methods:
 		# strictly sanitize form_dict
@@ -852,6 +909,7 @@ def is_whitelisted(method):
 
 def read_only():
 	def innfn(fn):
+		@functools.wraps(fn)
 		def wrapper_fn(*args, **kwargs):
 			# frappe.read_only could be called from nested functions, in such cases don't swap the
 			# connection again.
@@ -955,7 +1013,11 @@ def clear_cache(user: str | None = None, doctype: str | None = None):
 		frappe.cache_manager.clear_user_cache(user)
 	else:  # everything
 		# Delete ALL keys associated with this site.
-		frappe.cache.delete_keys("")
+		keys_to_delete = set(frappe.cache.get_keys(""))
+		for key in frappe.get_hooks("persistent_cache_keys"):
+			keys_to_delete.difference_update(frappe.cache.get_keys(key))
+		frappe.cache.delete_value(list(keys_to_delete), make_keys=False)
+
 		reset_metadata_version()
 		local.cache = {}
 		local.new_doc_templates = {}
@@ -1211,7 +1273,7 @@ def get_cached_value(doctype: str, name: str, fieldname: str = "name", as_dict: 
 
 	values = [doc.get(f) for f in fieldname]
 	if as_dict:
-		return _dict(zip(fieldname, values))
+		return _dict(zip(fieldname, values, strict=False))
 	return values
 
 
@@ -1555,7 +1617,7 @@ def _load_app_hooks(app_name: str | None = None):
 			raise
 
 		def _is_valid_hook(obj):
-			return not isinstance(obj, (types.ModuleType, types.FunctionType, type))
+			return not isinstance(obj, types.ModuleType | types.FunctionType | type)
 
 		for key, value in inspect.getmembers(app_hooks, predicate=_is_valid_hook):
 			if not key.startswith("_"):
@@ -1563,7 +1625,9 @@ def _load_app_hooks(app_name: str | None = None):
 	return hooks
 
 
-def get_hooks(hook: str = None, default: Any | None = "_KEEP_DEFAULT_LIST", app_name: str = None) -> _dict:
+def get_hooks(
+	hook: str | None = None, default: Any | None = "_KEEP_DEFAULT_LIST", app_name: str | None = None
+) -> _dict:
 	"""Get hooks via `app/hooks.py`
 
 	:param hook: Name of the hook. Will gather all hooks for this name and return as a list.
@@ -1604,24 +1668,46 @@ def append_hook(target, key, value):
 		target[key].extend(value)
 
 
-def setup_module_map():
-	"""Rebuild map of all modules (internal)."""
-	if conf.db_name:
-		local.app_modules = cache.get_value("app_modules")
-		local.module_app = cache.get_value("module_app")
+def setup_module_map(include_all_apps: bool = True) -> None:
+	"""
+	Function to rebuild map of all modules
 
-	if not (local.app_modules and local.module_app):
-		local.module_app, local.app_modules = {}, {}
-		for app in get_all_apps(with_internal_apps=True):
+	:param: include_all_apps: Include all apps on bench, or just apps installed on the site.
+	:return: Nothing
+	"""
+	if include_all_apps:
+		local.app_modules = cache.get_value("app_modules")
+	else:
+		local.app_modules = cache.get_value("installed_app_modules")
+
+	if not local.app_modules:
+		local.app_modules = {}
+		if include_all_apps:
+			apps = get_all_apps(with_internal_apps=True)
+		else:
+			apps = get_installed_apps(_ensure_on_bench=True)
+
+		for app in apps:
 			local.app_modules.setdefault(app, [])
 			for module in get_module_list(app):
 				module = scrub(module)
-				local.module_app[module] = app
 				local.app_modules[app].append(module)
 
-		if conf.db_name:
+		if include_all_apps:
 			cache.set_value("app_modules", local.app_modules)
-			cache.set_value("module_app", local.module_app)
+		else:
+			cache.set_value("installed_app_modules", local.app_modules)
+
+	# Init module_app (reverse mapping)
+	local.module_app = {}
+	for app, modules in local.app_modules.items():
+		for module in modules:
+			if module in local.module_app:
+				warnings.warn(
+					f"WARNING: module `{module}` found in apps `{local.module_app[module]}` and `{app}`",
+					stacklevel=1,
+				)
+			local.module_app[module] = app
 
 
 def get_file_items(path, raise_not_found=False, ignore_empty_lines=True):
@@ -1801,13 +1887,13 @@ def copy_doc(doc: "Document", ignore_no_copy: bool = True) -> "Document":
 
 	newdoc = get_doc(copy.deepcopy(d))
 	newdoc.set("__islocal", 1)
-	for fieldname in fields_to_clear + ["amended_from", "amendment_date"]:
+	for fieldname in [*fields_to_clear, "amended_from", "amendment_date"]:
 		newdoc.set(fieldname, None)
 
 	if not ignore_no_copy:
 		remove_no_copy_fields(newdoc)
 
-	for i, d in enumerate(newdoc.get_all_children()):
+	for _i, d in enumerate(newdoc.get_all_children()):
 		d.set("__islocal", 1)
 
 		for fieldname in fields_to_clear:
@@ -1966,7 +2052,7 @@ def get_all(doctype, *args, **kwargs):
 	        frappe.get_all("ToDo", fields=["*"], filters = [["modified", ">", "2014-01-01"]])
 	"""
 	kwargs["ignore_permissions"] = True
-	if not "limit_page_length" in kwargs:
+	if "limit_page_length" not in kwargs:
 		kwargs["limit_page_length"] = 0
 	return get_list(doctype, *args, **kwargs)
 
@@ -2074,21 +2160,27 @@ def get_print(
 	:param as_pdf: Return as PDF. Default False.
 	:param password: Password to encrypt the pdf with. Default None"""
 	from frappe.utils.pdf import get_pdf
-	from frappe.website.serve import get_response_content
+	from frappe.website.serve import get_response_without_exception_handling
 
-	local.form_dict.doctype = doctype
-	local.form_dict.name = name
-	local.form_dict.format = print_format
-	local.form_dict.style = style
-	local.form_dict.doc = doc
-	local.form_dict.no_letterhead = no_letterhead
-	local.form_dict.letterhead = letterhead
+	original_form_dict = copy.deepcopy(local.form_dict)
+	try:
+		local.form_dict.doctype = doctype
+		local.form_dict.name = name
+		local.form_dict.format = print_format
+		local.form_dict.style = style
+		local.form_dict.doc = doc
+		local.form_dict.no_letterhead = no_letterhead
+		local.form_dict.letterhead = letterhead
 
-	pdf_options = pdf_options or {}
-	if password:
-		pdf_options["password"] = password
+		pdf_options = pdf_options or {}
+		if password:
+			pdf_options["password"] = password
 
-	html = get_response_content("printview")
+		response = get_response_without_exception_handling("printview", 200)
+		html = str(response.data, "utf-8")
+	finally:
+		local.form_dict = original_form_dict
+
 	return get_pdf(html, options=pdf_options, output=output) if as_pdf else html
 
 
@@ -2371,9 +2463,22 @@ def safe_encode(param, encoding="utf-8"):
 	return param
 
 
-def safe_decode(param, encoding="utf-8"):
+def safe_decode(param, encoding="utf-8", fallback_map: dict | None = None):
+	"""
+	Method to safely decode data into a string
+
+	:param param: The data to be decoded
+	:param encoding: The encoding to decode into
+	:param fallback_map: A fallback map to reference in case of a LookupError
+	:return:
+	"""
 	try:
 		param = param.decode(encoding)
+	except LookupError:
+		try:
+			param = param.decode((fallback_map or {}).get(encoding, "utf-8"))
+		except Exception:
+			pass
 	except Exception:
 		pass
 	return param
@@ -2393,7 +2498,7 @@ def mock(type, size=1, locale="en"):
 	if type not in dir(fake):
 		raise ValueError("Not a valid mock type.")
 	else:
-		for i in range(size):
+		for _i in range(size):
 			data = getattr(fake, type)()
 			results.append(data)
 
@@ -2407,7 +2512,7 @@ def validate_and_sanitize_search_inputs(fn):
 	def wrapper(*args, **kwargs):
 		from frappe.desk.search import sanitize_searchfield
 
-		kwargs.update(dict(zip(fn.__code__.co_varnames, args)))
+		kwargs.update(dict(zip(fn.__code__.co_varnames, args, strict=False)))
 		sanitize_searchfield(kwargs["searchfield"])
 		kwargs["start"] = cint(kwargs["start"])
 		kwargs["page_len"] = cint(kwargs["page_len"])
@@ -2420,7 +2525,16 @@ def validate_and_sanitize_search_inputs(fn):
 	return wrapper
 
 
-from frappe.utils.error import log_error  # noqa: backward compatibility
+def _register_fault_handler():
+	import io
+	import sys
+
+	# Some libraries monkey patch stderr, we need actual fd
+	if isinstance(sys.__stderr__, io.TextIOWrapper):
+		faulthandler.register(signal.SIGUSR1, file=sys.__stderr__)
+
+
+from frappe.utils.error import log_error
 
 if _tune_gc:
 	# generational GC gets triggered after certain allocs (g0) which is 700 by default.
