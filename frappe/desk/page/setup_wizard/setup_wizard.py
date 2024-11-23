@@ -5,6 +5,7 @@ import json
 
 import frappe
 from frappe.geo.country_info import get_country_info
+from frappe.permissions import AUTOMATIC_ROLES
 from frappe.translate import get_messages_for_boot, send_translations, set_default_language
 from frappe.utils import cint, strip
 from frappe.utils.password import update_password
@@ -198,6 +199,7 @@ def update_user_name(args):
 				"last_name": last_name,
 			}
 		)
+		doc.append_roles("System Manager")
 		doc.flags.no_welcome_mail = True
 		doc.insert()
 		frappe.flags.mute_emails = _mute_emails
@@ -254,13 +256,11 @@ def add_all_roles_to(name):
 	user = frappe.get_doc("User", name)
 	for role in frappe.db.sql("""select name from tabRole"""):
 		if role[0] not in [
-			"Administrator",
-			"Guest",
-			"All",
 			"Customer",
 			"Supplier",
 			"Partner",
 			"Employee",
+			*AUTOMATIC_ROLES,
 		]:
 			d = user.append("roles")
 			d.role = role[0]

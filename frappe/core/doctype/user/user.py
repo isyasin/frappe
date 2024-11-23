@@ -14,7 +14,6 @@ from frappe.desk.doctype.notification_settings.notification_settings import (
 	toggle_notifications,
 )
 from frappe.desk.notifications import clear_notifications
-from frappe.model.delete_doc import check_if_doc_is_linked
 from frappe.model.document import Document
 from frappe.query_builder import DocType
 from frappe.rate_limiter import rate_limit
@@ -35,6 +34,17 @@ from frappe.utils.password import check_password, get_password_reset_limit
 from frappe.utils.password import update_password as _update_password
 from frappe.utils.user import get_system_managers
 from frappe.website.utils import is_signup_disabled
+
+desk_properties = (
+	"search_bar",
+	"notifications",
+	"list_sidebar",
+	"bulk_actions",
+	"view_switcher",
+	"form_sidebar",
+	"timeline",
+	"dashboard",
+)
 
 
 class User(Document):
@@ -75,9 +85,9 @@ class User(Document):
 			self.password_strength_test()
 
 		if self.name not in STANDARD_USERS:
-			self.validate_email_type(self.email)
+			self.email = self.name
 			self.validate_email_type(self.name)
-		self.add_system_manager_role()
+
 		self.populate_role_profile_roles()
 		self.check_roles_added()
 		self.set_system_user()
@@ -165,47 +175,12 @@ class User(Document):
 		if not cint(self.enabled) and self.name in STANDARD_USERS:
 			frappe.throw(_("User {0} cannot be disabled").format(self.name))
 
-		if not cint(self.enabled):
-			self.a_system_manager_should_exist()
-
 		# clear sessions if disabled
 		if not cint(self.enabled) and getattr(frappe.local, "login_manager", None):
 			frappe.local.login_manager.logout(user=self.name)
 
 		# toggle notifications based on the user's status
 		toggle_notifications(self.name, enable=cint(self.enabled))
-
-	def add_system_manager_role(self):
-		if self.is_system_manager_disabled():
-			return
-
-		# if adding system manager, do nothing
-		if not cint(self.enabled) or (
-			"System Manager" in [user_role.role for user_role in self.get("roles")]
-		):
-			return
-
-		if (
-			self.name not in STANDARD_USERS
-			and self.user_type == "System User"
-			and not self.get_other_system_managers()
-			and cint(frappe.db.get_single_value("System Settings", "setup_complete"))
-		):
-			msgprint(_("Adding System Manager to this User as there must be atleast one System Manager"))
-			self.append("roles", {"doctype": "Has Role", "role": "System Manager"})
-
-		if self.name == "Administrator":
-			# Administrator should always have System Manager Role
-			self.extend(
-				"roles",
-				[
-					{"doctype": "Has Role", "role": "System Manager"},
-					{"doctype": "Has Role", "role": "Administrator"},
-				],
-			)
-
-	def is_system_manager_disabled(self):
-		return frappe.db.get_value("Role", {"name": "System Manager"}, ["disabled"])
 
 	def email_new_password(self, new_password=None):
 		if new_password and not self.flags.in_insert:
@@ -277,7 +252,11 @@ class User(Document):
 							user=self.name, pwd=new_password, logout_all_sessions=self.logout_all_sessions
 						)
 
-					if not self.flags.no_welcome_mail and cint(self.send_welcome_email):
+					if (
+						not self.flags.no_welcome_mail
+						and cint(self.send_welcome_email)
+						and not self.flags.email_sent
+					):
 						self.send_welcome_mail_to_user()
 						self.flags.email_sent = 1
 						if frappe.session.user != "Guest":
@@ -315,22 +294,6 @@ class User(Document):
 			self.password_reset_mail(link)
 
 		return link
-
-	def get_other_system_managers(self):
-		user_doctype = DocType("User").as_("user")
-		user_role_doctype = DocType("Has Role").as_("user_role")
-		return (
-			frappe.qb.from_(user_doctype)
-			.from_(user_role_doctype)
-			.select(user_doctype.name)
-			.where(user_role_doctype.role == "System Manager")
-			.where(user_doctype.docstatus < 2)
-			.where(user_doctype.enabled == 1)
-			.where(user_role_doctype.parent == user_doctype.name)
-			.where(user_role_doctype.parent.notin(["Administrator", self.name]))
-			.limit(1)
-			.distinct()
-		).run()
 
 	def get_fullname(self):
 		"""get first_name space last_name"""
@@ -397,19 +360,10 @@ class User(Document):
 			retry=3,
 		)
 
-	def a_system_manager_should_exist(self):
-		if self.is_system_manager_disabled():
-			return
-
-		if not self.get_other_system_managers():
-			throw(_("There should remain at least one System Manager"))
-
 	def on_trash(self):
 		frappe.clear_cache(user=self.name)
 		if self.name in STANDARD_USERS:
 			throw(_("User {0} cannot be deleted").format(self.name))
-
-		self.a_system_manager_should_exist()
 
 		# disable the user and log him/her out
 		self.enabled = 0
@@ -463,11 +417,20 @@ class User(Document):
 		# Delete EPS data
 		frappe.db.delete("Energy Point Log", {"user": self.name})
 
-		# Ask user to disable instead if document is still linked
-		try:
-			check_if_doc_is_linked(self)
-		except frappe.LinkExistsError:
-			frappe.throw(_("You can disable the user instead of deleting it."), frappe.LinkExistsError)
+		# Remove user link from Workflow Action
+		frappe.db.set_value("Workflow Action", {"user": self.name}, "user", None)
+
+		# Delete user's List Filters
+		frappe.db.delete("List Filter", {"for_user": self.name})
+
+		# Remove user from Note's Seen By table
+		seen_notes = frappe.get_all("Note", filters=[["Note Seen By", "user", "=", self.name]], pluck="name")
+		for note_id in seen_notes:
+			note = frappe.get_doc("Note", note_id)
+			for row in note.seen_by:
+				if row.user == self.name:
+					note.remove(row)
+			note.save(ignore_permissions=True)
 
 	def before_rename(self, old_name, new_name, merge=False):
 		frappe.clear_cache(user=old_name)
@@ -699,7 +662,10 @@ def get_all_roles(arg=None):
 
 	roles = frappe.get_all(
 		"Role",
-		filters={"name": ("not in", "Administrator,Guest,All"), "disabled": 0},
+		filters={
+			"name": ("not in", frappe.permissions.AUTOMATIC_ROLES),
+			"disabled": 0,
+		},
 		or_filters={"ifnull(restrict_to_domain, '')": "", "restrict_to_domain": ("in", active_domains)},
 		order_by="name",
 	)
@@ -949,42 +915,33 @@ def reset_password(user: str) -> str:
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def user_query(doctype, txt, searchfield, start, page_len, filters):
-	from frappe.desk.reportview import get_filters_cond, get_match_cond
-
 	doctype = "User"
-	conditions = []
 
-	user_type_condition = "and user_type != 'Website User'"
-	if filters and filters.get("ignore_user_type") and frappe.session.data.user_type == "System User":
-		user_type_condition = ""
-	filters and filters.pop("ignore_user_type", None)
+	list_filters = {
+		"enabled": 1,
+		"docstatus": ["<", 2],
+		"name": ["not in", STANDARD_USERS],
+		searchfield: ["like", f"%{txt}%"],
+	}
 
-	txt = f"%{txt}%"
-	return frappe.db.sql(
-		"""SELECT `name`, CONCAT_WS(' ', first_name, middle_name, last_name)
-		FROM `tabUser`
-		WHERE `enabled`=1
-			{user_type_condition}
-			AND `docstatus` < 2
-			AND `name` NOT IN ({standard_users})
-			AND ({key} LIKE %(txt)s
-				OR CONCAT_WS(' ', first_name, middle_name, last_name) LIKE %(txt)s)
-			{fcond} {mcond}
-		ORDER BY
-			CASE WHEN `name` LIKE %(txt)s THEN 0 ELSE 1 END,
-			CASE WHEN concat_ws(' ', first_name, middle_name, last_name) LIKE %(txt)s
-				THEN 0 ELSE 1 END,
-			NAME asc
-		LIMIT %(page_len)s OFFSET %(start)s
-	""".format(
-			user_type_condition=user_type_condition,
-			standard_users=", ".join(frappe.db.escape(u) for u in STANDARD_USERS),
-			key=searchfield,
-			fcond=get_filters_cond(doctype, filters, conditions),
-			mcond=get_match_cond(doctype),
-		),
-		dict(start=start, page_len=page_len, txt=txt),
-	)
+	if filters:
+		if not (filters.get("ignore_user_type") and frappe.session.data.user_type == "System User"):
+			list_filters["user_type"] = ["!=", "Website User"]
+
+		filters.pop("ignore_user_type", None)
+		list_filters.update(filters)
+
+	return [
+		(user.name, user.full_name)
+		for user in frappe.get_list(
+			doctype,
+			filters=list_filters,
+			fields=["name", "full_name"],
+			limit_start=start,
+			limit_page_length=page_len,
+			order_by="name asc",
+		)
+	]
 
 
 def get_total_users():

@@ -43,6 +43,10 @@ def get_report_doc(report_name):
 				doc.custom_filters = data.get("filters")
 		doc.is_custom_report = True
 
+		# Follow whatever the custom report has set for prepared report field
+		doc.prepared_report = custom_report_doc.prepared_report
+		doc.disable_prepared_report = custom_report_doc.disable_prepared_report
+
 	if not doc.is_permitted():
 		frappe.throw(
 			_("You don't have access to Report: {0}").format(report_name),
@@ -340,7 +344,7 @@ def export_query():
 	if isinstance(visible_idx, str):
 		visible_idx = json.loads(visible_idx)
 
-	data = run(report_name, form_params.filters, custom_columns=custom_columns)
+	data = run(report_name, form_params.filters, custom_columns=custom_columns, are_default_filters=False)
 	data = frappe._dict(data)
 	if not data.columns:
 		frappe.respond_as_web_page(
@@ -464,6 +468,11 @@ def add_total_row(result, columns, meta=None, is_tree=False, parent_field=None):
 			if i >= len(row):
 				continue
 			cell = row.get(fieldname) if isinstance(row, dict) else row[i]
+			if fieldtype is None:
+				if isinstance(cell, int):
+					fieldtype = "Int"
+				elif isinstance(cell, float):
+					fieldtype = "Float"
 			if fieldtype in ["Currency", "Int", "Float", "Percent", "Duration"] and flt(cell):
 				if not (is_tree and row.get(parent_field)):
 					total_row[i] = flt(total_row[i]) + flt(cell)

@@ -65,21 +65,22 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 	}
 
 	get_url_with_filters() {
-		const query_params = Object.entries(this.get_filter_values())
-			.map(([field, value], _idx) => {
+		let query_params = new URLSearchParams();
+		if (this.prepared_report_name) {
+			query_params.append("prepared_report_name", this.prepared_report_name);
+		} else {
+			Object.entries(this.get_filter_values()).map(([field, value], _idx) => {
 				// multiselects
 				if (Array.isArray(value)) {
 					if (!value.length) return "";
 					value = JSON.stringify(value);
 				}
-				return `${field}=${encodeURIComponent(value)}`;
-			})
-			.filter(Boolean)
-			.join("&");
-
+				query_params.append(field, value);
+			});
+		}
 		let full_url = window.location.href.replace(window.location.search, "");
-		if (query_params) {
-			full_url += "?" + query_params;
+		if (query_params.toString()) {
+			full_url += "?" + query_params.toString();
 		}
 		return full_url;
 	}
@@ -268,7 +269,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 				fields: [
 					{
 						fieldname: "dashboard_chart_name",
-						label: "Chart Name",
+						label: __("Chart Name"),
 						fieldtype: "Data",
 					},
 					dashboard_field,
@@ -377,6 +378,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 	}
 
 	refresh_report(route_options) {
+		this.prepared_report_name = null; // this should be set only if prepared report is EXPLICITLY requested
 		this.toggle_message(true);
 		this.toggle_report(false);
 
@@ -395,7 +397,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 			.then((doc) => {
 				this.report_doc = doc;
 			})
-			.then(() => frappe.model.with_doctype(this.report_doc.ref_doctype));
+			.then(() => frappe.model.with_doctype(this.report_doc?.ref_doctype));
 	}
 
 	get_report_settings() {
@@ -443,7 +445,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 
 	setup_progress_bar() {
 		let seconds_elapsed = 0;
-		const execution_time = this.report_settings.execution_time || 0;
+		const execution_time = this.report_settings?.execution_time || 0;
 
 		if (execution_time < 5) return;
 
@@ -579,6 +581,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 			const fields = Object.keys(route_options);
 
 			const filters_to_set = this.filters.filter((f) => fields.includes(f.df.fieldname));
+			this.prepared_report_name = route_options.prepared_report_name;
 
 			const promises = filters_to_set.map((f) => {
 				return () => {
@@ -630,10 +633,8 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 			this.last_ajax.abort();
 		}
 
-		const query_params = this.get_query_params();
-
-		if (query_params.prepared_report_name) {
-			filters.prepared_report_name = query_params.prepared_report_name;
+		if (this.prepared_report_name) {
+			filters.prepared_report_name = this.prepared_report_name;
 		}
 
 		return new Promise((resolve) => {
@@ -669,7 +670,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 					this.prepared_report_document = data.doc;
 					// If query_string contains prepared_report_name then set filters
 					// to match the mentioned prepared report doc and disable editing
-					if (query_params.prepared_report_name) {
+					if (this.prepared_report_name) {
 						this.prepared_report_action = "Edit";
 						const filters_from_report = JSON.parse(data.doc.filters);
 						Object.values(this.filters).forEach(function (field) {
@@ -941,7 +942,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 		let data = this.data;
 		let columns = this.columns.filter((col) => !col.hidden);
 
-		if (data.length > 100000) {
+		if (data.length > 1000000) {
 			let msg = __(
 				"This report contains {0} rows and is too big to display in browser, you can {1} this report instead.",
 				[cstr(format_number(data.length, null, 0)).bold(), __("export").bold()]
@@ -1025,10 +1026,15 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 		if (options.fieldtype) {
 			options.tooltipOptions = {
 				formatTooltipY: (d) =>
-					frappe.format(d, {
-						fieldtype: options.fieldtype,
-						options: options.options,
-					}),
+					frappe.format(
+						d,
+						{
+							fieldtype: options.fieldtype,
+							options: options.options,
+						},
+						options.options,
+						options
+					),
 			};
 		}
 		options.axisOptions = {
@@ -1255,7 +1261,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 				// backend. Translating it again would cause unexpected behaviour.
 				name: column.label,
 				width: parseInt(column.width) || null,
-				editable: false,
+				editable: column.editable ?? false,
 				compareValue: compareFn,
 				format: (value, row, column, data, filter) => {
 					if (this.report_settings.formatter) {
@@ -1311,8 +1317,8 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 
 		raise && this.toggle_message(false);
 
-		const filters = this.filters
-			.filter((f) => f.get_value())
+		return this.filters
+			.filter((f) => f.get_value?.())
 			.map((f) => {
 				var v = f.get_value();
 				// hidden fields dont have $input
@@ -1329,7 +1335,6 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 				Object.assign(acc, f);
 				return acc;
 			}, {});
-		return filters;
 	}
 
 	get_filter(fieldname) {
@@ -1455,7 +1460,10 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 			.map((fieldname) => {
 				const docfield = frappe.query_report.get_filter(fieldname).df;
 				const value = applied_filters[fieldname];
-				return `<h6>${__(docfield.label)}: ${frappe.format(value, docfield)}</h6>`;
+				return `<h6>${__(docfield.label, null, docfield.parent)}: ${frappe.format(
+					value,
+					docfield
+				)}</h6>`;
 			})
 			.join("");
 	}
@@ -1485,11 +1493,8 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 				this.make_access_log("Export", file_format);
 
 				let filters = this.get_filter_values(true);
-				if (frappe.urllib.get_dict("prepared_report_name")) {
-					filters = Object.assign(
-						frappe.urllib.get_dict("prepared_report_name"),
-						filters
-					);
+				if (this.prepared_report_name) {
+					filters.prepared_report_name = this.prepared_report_name;
 				}
 
 				const visible_idx = this.datatable?.bodyRenderer.visibleRowIndices || [];
@@ -1640,7 +1645,7 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 								fieldtype: "Select",
 								fieldname: "doctype",
 								label: __("From Document Type"),
-								options: this.linked_doctypes.map((df) => ({
+								options: this.linked_doctypes?.map((df) => ({
 									label: df.doctype,
 									value: df.doctype,
 								})),

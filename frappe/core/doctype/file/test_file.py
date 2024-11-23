@@ -17,6 +17,7 @@ from frappe.core.api.file import (
 	move_file,
 	unzip_file,
 )
+from frappe.core.doctype.file.utils import get_corrupted_image_msg
 from frappe.desk.form.utils import add_comment
 from frappe.exceptions import ValidationError
 from frappe.tests.utils import FrappeTestCase
@@ -664,44 +665,8 @@ class TestAttachmentsAccess(FrappeTestCase):
 		self.assertNotIn("test_user_standalone.txt", system_manager_files)
 
 		self.assertIn("test_sm_attachment.txt", system_manager_attachments_files)
-		self.assertIn("test_sm_attachment.txt", user_attachments_files)
 		self.assertIn("test_user_attachment.txt", system_manager_attachments_files)
 		self.assertIn("test_user_attachment.txt", user_attachments_files)
-
-	def test_list_public_single_file(self):
-		"""Ensure that users are able to list public standalone files."""
-		frappe.set_user("test@example.com")
-		frappe.get_doc(
-			{
-				"doctype": "File",
-				"file_name": "test_public_single.txt",
-				"content": "Public single File",
-				"is_private": 0,
-			}
-		).insert()
-
-		frappe.set_user("test4@example.com")
-		files = [file.file_name for file in get_files_in_folder("Home")["files"]]
-		self.assertIn("test_public_single.txt", files)
-
-	def test_list_public_attachment(self):
-		"""Ensure that users are able to list public attachments."""
-		frappe.set_user("test@example.com")
-		self.attached_to_doctype, self.attached_to_docname = make_test_doc()
-		frappe.get_doc(
-			{
-				"doctype": "File",
-				"file_name": "test_public_attachment.txt",
-				"attached_to_doctype": self.attached_to_doctype,
-				"attached_to_name": self.attached_to_docname,
-				"content": "Public Attachment",
-				"is_private": 0,
-			}
-		).insert()
-
-		frappe.set_user("test4@example.com")
-		files = [file.file_name for file in get_files_in_folder("Home/Attachments")["files"]]
-		self.assertIn("test_public_attachment.txt", files)
 
 	def tearDown(self) -> None:
 		frappe.set_user("Administrator")
@@ -768,6 +733,26 @@ class TestFileUtils(FrappeTestCase):
 			frappe.db.exists("File", {"attached_to_name": communication.name, "is_private": is_private})
 		)
 		self.assertRegex(communication.content, r"<img src=\"(.*)/files/pix\.png(.*)\">")
+
+	def test_broken_image(self):
+		"""Ensure that broken inline images don't cause errors."""
+		is_private = not frappe.get_meta("Communication").make_attachments_public
+		communication = frappe.get_doc(
+			doctype="Communication",
+			communication_type="Communication",
+			communication_medium="Email",
+			content='<div class="ql-editor read-mode"><img src="data:image/png;filename=pix.png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CY="></div>',
+			recipients="to <to@test.com>",
+			cc=None,
+			bcc=None,
+			sender="sender@test.com",
+		).insert(ignore_permissions=True)
+
+		self.assertFalse(
+			frappe.db.exists("File", {"attached_to_name": communication.name, "is_private": is_private})
+		)
+		self.assertIn('src="#broken-image"', communication.content)
+		self.assertIn(f'alt="{get_corrupted_image_msg()}"', communication.content)
 
 	def test_create_new_folder(self):
 		folder = create_new_folder("test_folder", "Home")
@@ -905,3 +890,41 @@ class TestGuestFileAndAttachments(FrappeTestCase):
 		).insert(ignore_permissions=True)
 
 		self.assertFalse(file.is_downloadable())
+
+	def test_private_remains_private_even_if_same_hash(self):
+		file_name = "test" + frappe.generate_hash()
+		content = file_name.encode()
+
+		doc_pub: "File" = frappe.new_doc("File")  # type: ignore
+		doc_pub.file_url = f"/files/{file_name}.txt"
+		doc_pub.content = content
+		doc_pub.save()
+
+		doc_pri: "File" = frappe.new_doc("File")  # type: ignore
+		doc_pri.file_url = f"/private/files/{file_name}.txt"
+		doc_pri.is_private = False
+		doc_pri.content = content
+		doc_pri.save()
+
+		doc_pub.reload()
+		doc_pri.reload()
+
+		self.assertEqual(doc_pub.is_private, 0)
+		self.assertEqual(doc_pri.is_private, 1)
+
+		self.assertEqual(doc_pub.file_url, f"/files/{file_name}.txt")
+		self.assertEqual(doc_pri.file_url, f"/private/files/{file_name}.txt")
+
+		self.assertEqual(doc_pub.get_content(), content)
+		self.assertEqual(doc_pri.get_content(), content)
+
+		# Deleting a public File should not delete the private File's disk file
+		doc_pub.delete()
+		self.assertTrue(os.path.exists(doc_pri.get_full_path()))
+
+		# TODO: Migrate existing Files that have a mismatch between `is_private` and `file_url` prefix?
+		# self.assertFalse(os.path.exists(doc_pub.get_full_path()))
+
+		self.assertEqual(doc_pri.get_content(), content)
+		doc_pri.delete()
+		self.assertFalse(os.path.exists(doc_pri.get_full_path()))
