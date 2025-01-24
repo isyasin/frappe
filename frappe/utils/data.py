@@ -2,6 +2,7 @@
 # License: MIT. See LICENSE
 
 import base64
+import calendar
 import datetime
 import hashlib
 import json
@@ -277,7 +278,13 @@ def add_years(date, years):
 	return add_to_date(date, years=years)
 
 
-def date_diff(string_ed_date, string_st_date):
+def date_diff(string_ed_date: DateTimeLikeObject, string_st_date: DateTimeLikeObject) -> int:
+	"""Returns the difference between given two dates in days."""
+	return days_diff(string_ed_date, string_st_date)
+
+
+def days_diff(string_ed_date: DateTimeLikeObject, string_st_date: DateTimeLikeObject) -> int:
+	"""Returns the difference between given two dates in days."""
 	return (getdate(string_ed_date) - getdate(string_st_date)).days
 
 
@@ -713,6 +720,19 @@ def get_weekday(datetime: datetime.datetime | None = None) -> str:
 		datetime = now_datetime()
 	weekdays = get_weekdays()
 	return weekdays[datetime.weekday()]
+
+
+def get_month(datetime: DateTimeLikeObject | None = None) -> str:
+	"""Return the month name (e.g. 'January') for the given datetime like object (datetime.date, datetime.datetime, string).
+	If `datetime` argument is not provided, the current month name is returned.
+	"""
+	if not datetime:
+		datetime = now_datetime()
+
+	if isinstance(datetime, str):
+		datetime = get_datetime(datetime)
+
+	return calendar.month_name[datetime.month]
 
 
 def get_timespan_date_range(timespan: str) -> tuple[datetime.datetime, datetime.datetime] | None:
@@ -1898,6 +1918,11 @@ def sanitize_column(column_name: str) -> None:
 			elif any(keyword in column_name.split() for keyword in blacklisted_keywords):
 				_raise_exception()
 
+			elif any(
+				re.search(rf"\b{keyword}\b", column_name, re.IGNORECASE) for keyword in blacklisted_keywords
+			):
+				_raise_exception()
+
 	elif regex.match(column_name):
 		_raise_exception()
 
@@ -2220,6 +2245,8 @@ def get_imaginary_pixel_response():
 
 
 def is_site_link(link: str) -> bool:
+	if not link:
+		return False
 	if link.startswith("/"):
 		return True
 	return urlparse(link).netloc == urlparse(frappe.utils.get_url()).netloc
