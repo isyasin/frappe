@@ -1,20 +1,22 @@
-# Translations template for Frappe Framework.
-# Copyright (C) 2025 Frappe Technologies
-# This file is distributed under the same license as the Frappe Framework project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
-#
 msgid ""
 msgstr ""
-"Project-Id-Version: Frappe Framework VERSION\n"
+"Project-Id-Version: frappe\n"
 "Report-Msgid-Bugs-To: developers@frappe.io\n"
 "POT-Creation-Date: 2025-02-24 14:51+0000\n"
-"PO-Revision-Date: 2025-02-24 14:51+0000\n"
+"PO-Revision-Date: 2025-03-05 17:25\n"
 "Last-Translator: developers@frappe.io\n"
-"Language-Team: developers@frappe.io\n"
+"Language-Team: Thai\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.13.1\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Crowdin-Project: frappe\n"
+"X-Crowdin-Project-ID: 639578\n"
+"X-Crowdin-Language: th\n"
+"X-Crowdin-File: /[frappe.frappe] version-15-hotfix/frappe/locale/main.pot\n"
+"X-Crowdin-File-ID: 66\n"
+"Language: th_TH\n"
 
 #: frappe/templates/emails/download_data.html:9
 msgid " to your browser"
@@ -126,8 +128,7 @@ msgstr ""
 
 #. Description of the 'Fraction Units' (Int) field in DocType 'Currency'
 #: frappe/geo/doctype/currency/currency.json
-msgid ""
-"1 Currency = [?] Fraction\n"
+msgid "1 Currency = [?] Fraction\n"
 "For e.g. 1 USD = 100 Cent"
 msgstr ""
 
@@ -256,8 +257,7 @@ msgstr ""
 #. Content of the 'Help HTML' (HTML) field in DocType 'Document Naming
 #. Settings'
 #: frappe/core/doctype/document_naming_settings/document_naming_settings.json
-msgid ""
-"<div class=\"well\">\n"
+msgid "<div class=\"well\">\n"
 "    Edit list of Series in the box. Rules:\n"
 "    <ul>\n"
 "        <li>Each Series Prefix on a new line.</li>\n"
@@ -299,26 +299,18 @@ msgstr ""
 
 #. Content of the 'Custom HTML Help' (HTML) field in DocType 'Print Format'
 #: frappe/printing/doctype/print_format/print_format.json
-msgid ""
-"<h3>Custom CSS Help</h3>\n"
-"\n"
-"<p>Notes:</p>\n"
-"\n"
+msgid "<h3>Custom CSS Help</h3>\n\n"
+"<p>Notes:</p>\n\n"
 "<ol>\n"
 "<li>All field groups (label + value) are set attributes <code>data-fieldtype</code> and <code>data-fieldname</code></li>\n"
 "<li>All values are given class <code>value</code></li>\n"
 "<li>All Section Breaks are given class <code>section-break</code></li>\n"
 "<li>All Column Breaks are given class <code>column-break</code></li>\n"
-"</ol>\n"
-"\n"
-"<h4>Examples</h4>\n"
-"\n"
-"<p>1. Left align integers</p>\n"
-"\n"
-"<pre><code>[data-fieldtype=\"Int\"] .value { text-align: left; }</code></pre>\n"
-"\n"
-"<p>1. Add border to sections except the last section</p>\n"
-"\n"
+"</ol>\n\n"
+"<h4>Examples</h4>\n\n"
+"<p>1. Left align integers</p>\n\n"
+"<pre><code>[data-fieldtype=\"Int\"] .value { text-align: left; }</code></pre>\n\n"
+"<p>1. Add border to sections except the last section</p>\n\n"
 "<pre><code>.section-break { padding: 30px 0px; border-bottom: 1px solid #eee; }\n"
 ".section-break:last-child { padding-bottom: 0px; border-bottom: 0px;  }</code></pre>\n"
 msgstr ""
@@ -326,8 +318,7 @@ msgstr ""
 #. Content of the 'Print Format Help' (HTML) field in DocType 'Print Format'
 #: frappe/printing/doctype/print_format/print_format.json
 #, python-format
-msgid ""
-"<h3>Print Format Help</h3>\n"
+msgid "<h3>Print Format Help</h3>\n"
 "<hr>\n"
 "<h4>Introduction</h4>\n"
 "<p>Print Formats are rendered on the server side using the Jinja Templating Language. All forms have access to the <code>doc</code> object which contains information about the document that is being formatted. You can also access common utilities via the <code>frappe</code> module.</p>\n"
@@ -398,8 +389,7 @@ msgstr ""
 #. Description of the 'Template' (Code) field in DocType 'Address Template'
 #: frappe/contacts/doctype/address_template/address_template.json
 #, python-format
-msgid ""
-"<h4>Default Template</h4>\n"
+msgid "<h4>Default Template</h4>\n"
 "<p>Uses <a href=\"http://jinja.pocoo.org/docs/templates/\">Jinja Templating</a> and all the fields of Address (including Custom Fields if any) will be available</p>\n"
 "<pre><code>{{ address_line1 }}&lt;br&gt;\n"
 "{% if address_line2 %}{{ address_line2 }}&lt;br&gt;{% endif -%}\n"
@@ -415,25 +405,16 @@ msgstr ""
 
 #. Content of the 'Email Reply Help' (HTML) field in DocType 'Email Template'
 #: frappe/email/doctype/email_template/email_template.json
-msgid ""
-"<h4>Email Reply Example</h4>\n"
-"\n"
-"<pre>Order Overdue\n"
-"\n"
-"Transaction {{ name }} has exceeded Due Date. Please take necessary action.\n"
-"\n"
-"Details\n"
-"\n"
+msgid "<h4>Email Reply Example</h4>\n\n"
+"<pre>Order Overdue\n\n"
+"Transaction {{ name }} has exceeded Due Date. Please take necessary action.\n\n"
+"Details\n\n"
 "- Customer: {{ customer }}\n"
 "- Amount: {{ grand_total }}\n"
-"</pre>\n"
-"\n"
-"<h4>How to get fieldnames</h4>\n"
-"\n"
-"<p>The fieldnames you can use in your email template are the fields in the document from which you are sending the email. You can find out the fields of any documents via Setup &gt; Customize Form View and selecting the document type (e.g. Sales Invoice)</p>\n"
-"\n"
-"<h4>Templating</h4>\n"
-"\n"
+"</pre>\n\n"
+"<h4>How to get fieldnames</h4>\n\n"
+"<p>The fieldnames you can use in your email template are the fields in the document from which you are sending the email. You can find out the fields of any documents via Setup &gt; Customize Form View and selecting the document type (e.g. Sales Invoice)</p>\n\n"
+"<h4>Templating</h4>\n\n"
 "<p>Templates are compiled using the Jinja Templating Language. To learn more about Jinja, <a class=\"strong\" href=\"http://jinja.pocoo.org/docs/dev/templates/\">read this documentation.</a></p>\n"
 msgstr ""
 
@@ -445,20 +426,14 @@ msgstr ""
 #. Content of the 'Message Examples' (HTML) field in DocType 'Notification'
 #: frappe/email/doctype/notification/notification.json
 #, python-format
-msgid ""
-"<h5>Message Example</h5>\n"
-"\n"
-"<pre>&lt;h3&gt;Order Overdue&lt;/h3&gt;\n"
-"\n"
-"&lt;p&gt;Transaction {{ doc.name }} has exceeded Due Date. Please take necessary action.&lt;/p&gt;\n"
-"\n"
+msgid "<h5>Message Example</h5>\n\n"
+"<pre>&lt;h3&gt;Order Overdue&lt;/h3&gt;\n\n"
+"&lt;p&gt;Transaction {{ doc.name }} has exceeded Due Date. Please take necessary action.&lt;/p&gt;\n\n"
 "&lt;!-- show last comment --&gt;\n"
 "{% if comments %}\n"
 "Last comment: {{ comments[-1].comment }} by {{ comments[-1].by }}\n"
-"{% endif %}\n"
-"\n"
-"&lt;h4&gt;Details&lt;/h4&gt;\n"
-"\n"
+"{% endif %}\n\n"
+"&lt;h4&gt;Details&lt;/h4&gt;\n\n"
 "&lt;ul&gt;\n"
 "&lt;li&gt;Customer: {{ doc.customer }}\n"
 "&lt;li&gt;Amount: {{ doc.grand_total }}\n"
@@ -468,32 +443,28 @@ msgstr ""
 
 #. Content of the 'html_condition' (HTML) field in DocType 'Webhook'
 #: frappe/integrations/doctype/webhook/webhook.json
-msgid ""
-"<p><strong>Condition Examples:</strong></p>\n"
+msgid "<p><strong>Condition Examples:</strong></p>\n"
 "<pre>doc.status==\"Open\"<br>doc.due_date==nowdate()<br>doc.total &gt; 40000\n"
 "</pre>"
 msgstr ""
 
 #. Content of the 'html_7' (HTML) field in DocType 'Notification'
 #: frappe/email/doctype/notification/notification.json
-msgid ""
-"<p><strong>Condition Examples:</strong></p>\n"
+msgid "<p><strong>Condition Examples:</strong></p>\n"
 "<pre>doc.status==\"Open\"<br>doc.due_date==nowdate()<br>doc.total &gt; 40000\n"
 "</pre>\n"
 msgstr ""
 
 #. Content of the 'Condition description' (HTML) field in DocType 'Web Form'
 #: frappe/website/doctype/web_form/web_form.json
-msgid ""
-"<p>Multiple webforms can be created for a single doctype. Add filters specific to this webform to display correct record after submission.</p><p>For Example:</p>\n"
+msgid "<p>Multiple webforms can be created for a single doctype. Add filters specific to this webform to display correct record after submission.</p><p>For Example:</p>\n"
 "<p>If you create a separate webform every year to capture feedback from employees add a \n"
 " field named year in doctype and add a filter <b>year = 2023</b></p>\n"
 msgstr ""
 
 #. Description of the 'Context Script' (Code) field in DocType 'Web Page'
 #: frappe/website/doctype/web_page/web_page.json
-msgid ""
-"<p>Set context before rendering a template. Example:</p><p>\n"
+msgid "<p>Set context before rendering a template. Example:</p><p>\n"
 "</p><div><pre><code>\n"
 "context.project = frappe.get_doc(\"Project\", frappe.form_dict.name)\n"
 "</code></pre></div>"
@@ -501,8 +472,7 @@ msgstr ""
 
 #. Content of the 'JS Message' (HTML) field in DocType 'Custom HTML Block'
 #: frappe/desk/doctype/custom_html_block/custom_html_block.json
-msgid ""
-"<p>To interact with above HTML you will have to use `root_element` as a parent selector.</p><p>For example:</p><pre class=\"p-3 bg-gray-100 border-radius rounded-sm mb-0\" style=\"width: fit-content;\"><code>// here root_element is provided by default\n"
+msgid "<p>To interact with above HTML you will have to use `root_element` as a parent selector.</p><p>For example:</p><pre class=\"p-3 bg-gray-100 border-radius rounded-sm mb-0\" style=\"width: fit-content;\"><code>// here root_element is provided by default\n"
 "let some_class_element = root_element.querySelector('.some-class');\n"
 "some_class_element.textContent = \"New content\";\n"
 "</code></pre>"
@@ -517,18 +487,15 @@ msgstr ""
 #. Description of the 'Cron Format' (Data) field in DocType 'Server Script'
 #: frappe/core/doctype/scheduled_job_type/scheduled_job_type.json
 #: frappe/core/doctype/server_script/server_script.json
-msgid ""
-"<pre>*  *  *  *  *\n"
+msgid "<pre>*  *  *  *  *\n"
 "┬  ┬  ┬  ┬  ┬\n"
 "│  │  │  │  │\n"
 "│  │  │  │  └ day of week (0 - 6) (0 is Sunday)\n"
 "│  │  │  └───── month (1 - 12)\n"
 "│  │  └────────── day of month (1 - 31)\n"
 "│  └─────────────── hour (0 - 23)\n"
-"└──────────────────── minute (0 - 59)\n"
-"\n"
-"---\n"
-"\n"
+"└──────────────────── minute (0 - 59)\n\n"
+"---\n\n"
 "* - Any value\n"
 "/ - Step values\n"
 "</pre>\n"
@@ -536,9 +503,7 @@ msgstr ""
 
 #. Content of the 'Example' (HTML) field in DocType 'Workflow Transition'
 #: frappe/workflow/doctype/workflow_transition/workflow_transition.json
-msgid ""
-"<pre><code>doc.grand_total &gt; 0</code></pre>\n"
-"\n"
+msgid "<pre><code>doc.grand_total &gt; 0</code></pre>\n\n"
 "<p>Conditions should be written in simple Python. Please use properties available in the form only.</p>\n"
 "<p>Allowed functions:\n"
 "</p><ul>\n"
@@ -1818,9 +1783,7 @@ msgstr ""
 #. Description of the 'Allow Bulk Editing' (Check) field in DocType 'List View
 #. Settings'
 #: frappe/desk/doctype/list_view_settings/list_view_settings.json
-msgid ""
-"Allow editing even if the doctype has a workflow set up.\n"
-"\n"
+msgid "Allow editing even if the doctype has a workflow set up.\n\n"
 "Does nothing if a workflow isn't set up."
 msgstr ""
 
@@ -3541,8 +3504,7 @@ msgstr ""
 
 #. Description of the 'Brand HTML' (Code) field in DocType 'Website Settings'
 #: frappe/website/doctype/website_settings/website_settings.json
-msgid ""
-"Brand is what appears on the top-left of the toolbar. If it is an image, make sure it\n"
+msgid "Brand is what appears on the top-left of the toolbar. If it is an image, make sure it\n"
 "has a transparent background and use the &lt;img /&gt; tag. Keep size as 200px x 30px"
 msgstr ""
 
@@ -4327,9 +4289,7 @@ msgstr ""
 #. Description of the 'Update Series Counter' (Section Break) field in DocType
 #. 'Document Naming Settings'
 #: frappe/core/doctype/document_naming_settings/document_naming_settings.json
-msgid ""
-"Change the starting / current sequence number of an existing series. <br>\n"
-"\n"
+msgid "Change the starting / current sequence number of an existing series. <br>\n\n"
 "Warning: Incorrectly updating counters can prevent documents from getting created. "
 msgstr ""
 
@@ -5210,11 +5170,8 @@ msgstr ""
 #. Description of the 'Amended Documents' (Section Break) field in DocType
 #. 'Document Naming Settings'
 #: frappe/core/doctype/document_naming_settings/document_naming_settings.json
-msgid ""
-"Configure how amended documents will be named.<br>\n"
-"\n"
-"Default behaviour is to follow an amend counter which adds a number to the end of the original name indicating the amended version. <br>\n"
-"\n"
+msgid "Configure how amended documents will be named.<br>\n\n"
+"Default behaviour is to follow an amend counter which adds a number to the end of the original name indicating the amended version. <br>\n\n"
 "Default Naming will make the amended document to behave same as new documents."
 msgstr ""
 
@@ -7363,8 +7320,7 @@ msgid "DocShare"
 msgstr ""
 
 #: frappe/workflow/doctype/workflow/workflow.js:264
-msgid ""
-"DocStatus of the following states have changed:<br><strong>{0}</strong><br>\n"
+msgid "DocStatus of the following states have changed:<br><strong>{0}</strong><br>\n"
 "\t\t\t\tDo you want to update the docstatus of existing documents in those states?<br>\n"
 "\t\t\t\tThis does not undo any effect bought in by the document's existing docstatus.\n"
 "\t\t\t\t"
@@ -8815,8 +8771,7 @@ msgstr ""
 
 #. Description of the 'Modal Trigger' (Check) field in DocType 'Form Tour Step'
 #: frappe/desk/doctype/form_tour_step/form_tour_step.json
-msgid ""
-"Enable if on click\n"
+msgid "Enable if on click\n"
 "opens modal."
 msgstr ""
 
@@ -9232,9 +9187,7 @@ msgstr ""
 
 #. Description of the Onboarding Step 'Create Custom Fields'
 #: frappe/custom/onboarding_step/custom_field/custom_field.json
-msgid ""
-"Every form in ERPNext has a standard set of fields. If you need to capture some information, but there is no standard Field available for it, you can insert Custom Field for it.\n"
-"\n"
+msgid "Every form in ERPNext has a standard set of fields. If you need to capture some information, but there is no standard Field available for it, you can insert Custom Field for it.\n\n"
 "Once custom fields are added, you can use them for reports and analytics charts as well.\n"
 msgstr ""
 
@@ -10472,8 +10425,7 @@ msgstr ""
 #. Field'
 #: frappe/core/doctype/docfield/docfield.json
 #: frappe/custom/doctype/customize_form_field/customize_form_field.json
-msgid ""
-"For Links, enter the DocType as range.\n"
+msgid "For Links, enter the DocType as range.\n"
 "For Select, enter list of Options, each on a new line."
 msgstr ""
 
@@ -15106,8 +15058,7 @@ msgstr ""
 #. Description of the 'Maximum Points' (Int) field in DocType 'Energy Point
 #. Rule'
 #: frappe/social/doctype/energy_point_rule/energy_point_rule.json
-msgid ""
-"Maximum points allowed after multiplying points with the multiplier value\n"
+msgid "Maximum points allowed after multiplying points with the multiplier value\n"
 "(Note: For no limit leave this field empty or set 0)"
 msgstr ""
 
@@ -15897,16 +15848,14 @@ msgstr ""
 
 #. Description of the 'Auto Name' (Data) field in DocType 'DocType'
 #: frappe/core/doctype/doctype/doctype.json
-msgid ""
-"Naming Options:\n"
+msgid "Naming Options:\n"
 "<ol><li><b>field:[fieldname]</b> - By Field</li><li><b>autoincrement</b> - Uses Databases' Auto Increment feature</li><li><b>naming_series:</b> - By Naming Series (field called naming_series must be present)</li><li><b>Prompt</b> - Prompt user for a name</li><li><b>[series]</b> - Series by prefix (separated by a dot); for example PRE.#####</li>\n"
 "<li><b>format:EXAMPLE-{MM}morewords{fieldname1}-{fieldname2}-{#####}</b> - Replace all braced words (fieldnames, date words (DD, MM, YY), series) with their value. Outside braces, any characters can be used.</li></ol>"
 msgstr ""
 
 #. Description of the 'Auto Name' (Data) field in DocType 'Customize Form'
 #: frappe/custom/doctype/customize_form/customize_form.json
-msgid ""
-"Naming Options:\n"
+msgid "Naming Options:\n"
 "<ol><li><b>field:[fieldname]</b> - By Field</li><li><b>naming_series:</b> - By Naming Series (field called naming_series must be present)</li><li><b>Prompt</b> - Prompt user for a name</li><li><b>[series]</b> - Series by prefix (separated by a dot); for example PRE.#####</li>\n"
 "<li><b>format:EXAMPLE-{MM}morewords{fieldname1}-{fieldname2}-{#####}</b> - Replace all braced words (fieldnames, date words (DD, MM, YY), series) with their value. Outside braces, any characters can be used.</li></ol>"
 msgstr ""
@@ -23113,8 +23062,7 @@ msgstr ""
 #. Description of the 'Filters Configuration' (Code) field in DocType 'Number
 #. Card'
 #: frappe/desk/doctype/number_card/number_card.json
-msgid ""
-"Set the filters here. For example:\n"
+msgid "Set the filters here. For example:\n"
 "<pre class=\"small text-muted\"><code>\n"
 "[{\n"
 "\tfieldname: \"company\",\n"
@@ -23136,9 +23084,7 @@ msgstr ""
 
 #. Description of the 'Method' (Data) field in DocType 'Number Card'
 #: frappe/desk/doctype/number_card/number_card.json
-msgid ""
-"Set the path to a whitelisted function that will return the data for the number card in the format:\n"
-"\n"
+msgid "Set the path to a whitelisted function that will return the data for the number card in the format:\n\n"
 "<pre class=\"small text-muted\"><code>\n"
 "{\n"
 "\t\"value\": value,\n"
@@ -25268,12 +25214,8 @@ msgid "Thank you"
 msgstr ""
 
 #: frappe/www/contact.py:39
-msgid ""
-"Thank you for reaching out to us. We will get back to you at the earliest.\n"
-"\n"
-"\n"
-"Your query:\n"
-"\n"
+msgid "Thank you for reaching out to us. We will get back to you at the earliest.\n\n\n"
+"Your query:\n\n"
 "{0}"
 msgstr ""
 
@@ -25311,8 +25253,7 @@ msgstr ""
 
 #. Description of the 'Client ID' (Data) field in DocType 'Google Settings'
 #: frappe/integrations/doctype/google_settings/google_settings.json
-msgid ""
-"The Client ID obtained from the Google Cloud Console under <a href=\"https://console.cloud.google.com/apis/credentials\">\n"
+msgid "The Client ID obtained from the Google Cloud Console under <a href=\"https://console.cloud.google.com/apis/credentials\">\n"
 "\"APIs &amp; Services\" &gt; \"Credentials\"\n"
 "</a>"
 msgstr ""
@@ -25353,8 +25294,7 @@ msgstr ""
 
 #. Description of the 'API Key' (Data) field in DocType 'Google Settings'
 #: frappe/integrations/doctype/google_settings/google_settings.json
-msgid ""
-"The browser API key obtained from the Google Cloud Console under <a href=\"https://console.cloud.google.com/apis/credentials\">\n"
+msgid "The browser API key obtained from the Google Cloud Console under <a href=\"https://console.cloud.google.com/apis/credentials\">\n"
 "\"APIs &amp; Services\" &gt; \"Credentials\"\n"
 "</a>"
 msgstr ""
@@ -25469,8 +25409,7 @@ msgstr ""
 
 #. Description of the 'App ID' (Data) field in DocType 'Google Settings'
 #: frappe/integrations/doctype/google_settings/google_settings.json
-msgid ""
-"The project number obtained from Google Cloud Console under <a href=\"https://console.cloud.google.com/iam-admin/settings\">\n"
+msgid "The project number obtained from Google Cloud Console under <a href=\"https://console.cloud.google.com/iam-admin/settings\">\n"
 "\"IAM &amp; Admin\" &gt; \"Settings\"\n"
 "</a>"
 msgstr ""
@@ -25735,8 +25674,7 @@ msgid "This email is autogenerated"
 msgstr ""
 
 #: frappe/printing/doctype/network_printer_settings/network_printer_settings.py:30
-msgid ""
-"This feature can not be used as dependencies are missing.\n"
+msgid "This feature can not be used as dependencies are missing.\n"
 "\t\t\t\tPlease contact your system manager to enable this by installing pycups!"
 msgstr ""
 
@@ -25747,8 +25685,7 @@ msgstr ""
 #. Description of the 'Depends On' (Code) field in DocType 'Customize Form
 #. Field'
 #: frappe/custom/doctype/customize_form_field/customize_form_field.json
-msgid ""
-"This field will appear only if the fieldname defined here has value OR the rules are true (examples):\n"
+msgid "This field will appear only if the fieldname defined here has value OR the rules are true (examples):\n"
 "myfield\n"
 "eval:doc.myfield=='My Value'\n"
 "eval:doc.age&gt;18"
@@ -26192,25 +26129,19 @@ msgstr ""
 
 #. Description of the 'Subject' (Data) field in DocType 'Auto Repeat'
 #: frappe/automation/doctype/auto_repeat/auto_repeat.json
-msgid ""
-"To add dynamic subject, use jinja tags like\n"
-"\n"
+msgid "To add dynamic subject, use jinja tags like\n\n"
 "<div><pre><code>New {{ doc.doctype }} #{{ doc.name }}</code></pre></div>"
 msgstr ""
 
 #. Description of the 'Subject' (Data) field in DocType 'Notification'
 #: frappe/email/doctype/notification/notification.json
-msgid ""
-"To add dynamic subject, use jinja tags like\n"
-"\n"
+msgid "To add dynamic subject, use jinja tags like\n\n"
 "<div><pre><code>{{ doc.name }} Delivered</code></pre></div>"
 msgstr ""
 
 #. Description of the 'JSON Request Body' (Code) field in DocType 'Webhook'
 #: frappe/integrations/doctype/webhook/webhook.json
-msgid ""
-"To add dynamic values from the document, use jinja tags like\n"
-"\n"
+msgid "To add dynamic values from the document, use jinja tags like\n\n"
 "<div>\n"
 "<pre><code>{ \"id\": \"{{ doc.name }}\" }</code>\n"
 "</pre>\n"
@@ -26571,8 +26502,7 @@ msgstr ""
 #. Description of the 'Track Email Status' (Check) field in DocType 'Email
 #. Account'
 #: frappe/email/doctype/email_account/email_account.json
-msgid ""
-"Track if your email has been opened by the recipient.\n"
+msgid "Track if your email has been opened by the recipient.\n"
 "<br>\n"
 "Note: If you're sending to multiple recipients, even if 1 recipient reads the email, it'll be considered \"Opened\""
 msgstr ""
@@ -26846,8 +26776,7 @@ msgstr ""
 
 #. Description of the 'Redirect URIs' (Text) field in DocType 'OAuth Client'
 #: frappe/integrations/doctype/oauth_client/oauth_client.json
-msgid ""
-"URIs for receiving authorization code once the user allows access, as well as failure responses. Typically a REST endpoint exposed by the Client App.\n"
+msgid "URIs for receiving authorization code once the user allows access, as well as failure responses. Typically a REST endpoint exposed by the Client App.\n"
 "<br>e.g. http://hostname/api/method/frappe.integrations.oauth2_logins.login_via_facebook"
 msgstr ""
 
@@ -31490,8 +31419,7 @@ msgid "{0} must be {1} {2}"
 msgstr ""
 
 #: frappe/core/doctype/language/language.py:43
-msgid ""
-"{0} must begin and end with a letter and can only contain letters,\n"
+msgid "{0} must begin and end with a letter and can only contain letters,\n"
 "\t\t\t\thyphen or underscore."
 msgstr ""
 
