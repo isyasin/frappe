@@ -470,7 +470,7 @@ class Document(BaseDocument):
 
 	def update_child_table(self, fieldname: str, df: Optional["DocField"] = None):
 		"""sync child table for given fieldname"""
-		df: "DocField" = df or self.meta.get_field(fieldname)
+		df: DocField = df or self.meta.get_field(fieldname)
 		all_rows = self.get(df.fieldname)
 
 		# delete rows that do not match the ones in the document
@@ -1513,10 +1513,14 @@ class Document(BaseDocument):
 
 			return view_log
 
-	def log_error(self, title=None, message=None):
+	def log_error(self, title=None, message=None, *, defer_insert=False):
 		"""Helper function to create an Error Log"""
 		return frappe.log_error(
-			message=message, title=title, reference_doctype=self.doctype, reference_name=self.name
+			message=message,
+			title=title,
+			reference_doctype=self.doctype,
+			reference_name=self.name,
+			defer_insert=defer_insert,
 		)
 
 	def get_signature(self):
