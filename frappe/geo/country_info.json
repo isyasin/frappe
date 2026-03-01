@@ -199,15 +199,19 @@
   "isd": "+43"
  },
  "Azerbaijan": {
-  "code": "az",
-  "currency_fraction": "Q\u0259pik",
-  "currency_fraction_units": 100,
-  "currency_symbol": "",
-  "number_format": "#,###.##",
-  "timezones": [
-   "Asia/Baku"
-  ],
-  "isd": "+994"
+    "code": "az",
+    "currency": "AZN",
+    "currency_fraction": "Q\u0259pik",
+    "currency_fraction_units": 100,
+    "smallest_currency_fraction_value": 0.01,
+    "currency_name": "AZN",
+    "currency_symbol": "₼",
+    "date_format": "dd.mm.yyyy",
+    "number_format": "# ###.##",
+    "timezones": [
+     "Asia/Baku"
+    ],
+    "isd": "+994"
  },
  "Bahamas": {
   "code": "bs",
