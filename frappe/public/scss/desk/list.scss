@@ -346,7 +346,6 @@ input.list-header-checkbox {
 .modal-body {
 	.list-item--head {
 		position: sticky !important;
-		z-index: 500;
 		top: 0;
 	}
 
@@ -697,5 +696,16 @@ input.list-header-checkbox {
 				}
 			}
 		}
+	}
+	.page-indicator-pill {
+		display: none;
+	}
+}
+
+@media screen and (max-width: 375px) {
+	.navbar-breadcrumbs li:last-child > a {
+		max-width: 105px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 }
