@@ -116,8 +116,8 @@
 			align-items: center;
 			// padding: 3px 0px 3px 11px;
 			flex: 1;
-			height: 30px;
-			color: var(--ink-gray-8);
+			height: 28px;
+			color: var(--ink-gray-6);
 			text-decoration: none;
 			@include transition(all, 0.3s, cubic-bezier(0.4, 0, 0.2, 1));
 			.sidebar-item-icon {
@@ -279,6 +279,41 @@
 
 .overlay {
 	display: none;
+}
+
+.body-sidebar .sidebar-toggle-btn {
+	position: absolute;
+	right: -12px;
+	bottom: 80px;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	border: 1px solid var(--sidebar-border-color);
+	background: var(--surface-menu-bar);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: 0;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.15s ease, visibility 0.15s ease;
+	z-index: 1023;
+
+	svg {
+		width: 12px;
+		height: 12px;
+	}
+
+	&:hover {
+		background: var(--sidebar-hover-color);
+	}
+}
+
+.body-sidebar:hover .sidebar-toggle-btn {
+	opacity: 1;
+	visibility: visible;
 }
 
 .sidebar-resize-handle {

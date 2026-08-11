@@ -24,7 +24,7 @@ from frappe.model import OPTIONAL_FIELDS, get_permitted_fields
 from frappe.model.base_document import DOCTYPES_FOR_DOCTYPE
 from frappe.model.document import Document
 from frappe.query_builder import Criterion, Field, Order, functions
-from frappe.query_builder.custom import Month, MonthName, Quarter
+from frappe.query_builder.custom import Month, MonthName, Quarter, Year
 
 CORE_DOCTYPES = DOCTYPES_FOR_DOCTYPE | frozenset(
 	(
@@ -193,6 +193,7 @@ FUNCTION_MAPPING = {
 	"MONTHNAME": MonthName,
 	"QUARTER": Quarter,
 	"MONTH": Month,
+	"YEAR": Year,
 }
 
 # Functions that accept '*' as an argument (e.g., COUNT(*))
@@ -615,15 +616,17 @@ class Engine:
 			# If _field is from a dynamic field, its name might be just the target fieldname.
 			# We need the original string ('link.target') or the fieldname from the main doctype.
 			original_field_name = field if isinstance(field, str) else _field.name
-			# Check if the original field name exists in the *main* doctype meta
-			main_meta = frappe.get_meta(self.doctype)
-			if main_meta.has_field(original_field_name):
-				_df = main_meta.get_field(original_field_name)
-				ref_doctype = _df.options if _df else self.doctype
+			# When the filter targets a child table, resolve the field against
+			# the child doctype rather than the parent.
+			lookup_doctype = doctype or self.doctype
+			lookup_meta = frappe.get_meta(lookup_doctype)
+			if lookup_meta.has_field(original_field_name):
+				_df = lookup_meta.get_field(original_field_name)
+				ref_doctype = _df.options if _df else lookup_doctype
 			else:
-				# If not in main doctype, assume it's a standard field like 'name' or refers to the main doctype itself
+				# If not in lookup doctype, assume it's a standard field like 'name' or refers to the lookup doctype itself
 				# This part might need refinement if nested set operators are used with dynamic fields.
-				ref_doctype = self.doctype
+				ref_doctype = lookup_doctype
 
 			nodes = get_nested_set_hierarchy_result(ref_doctype, docname, hierarchy)
 			operator_fn = (
@@ -1365,8 +1368,9 @@ class Engine:
 
 	def _raise_permission_error(self, doctype=None):
 		frappe.throw(
-			_("Insufficient Permission for {0}").format(frappe.bold(doctype or self.doctype)),
-			frappe.PermissionError,
+			title=_("Permission Error"),
+			msg=_("Insufficient Permission for {0}").format(frappe.bold(doctype or self.doctype)),
+			exc=frappe.PermissionError,
 		)
 
 	def apply_field_permissions(self):
@@ -1686,6 +1690,7 @@ class Engine:
 			if not user_permissions:
 				return match_filters
 
+			permission_filters = {}
 			for df in self.get_doctype_link_fields(self.doctype):
 				if df.get("ignore_user_permissions"):
 					continue
@@ -1709,7 +1714,10 @@ class Engine:
 							docs.append(doc)
 
 					if docs:
-						match_filters.append({options: docs})
+						permission_filters[options] = docs
+
+			if permission_filters:
+				match_filters.append(permission_filters)
 
 			return match_filters
 
@@ -2042,10 +2050,13 @@ class LinkTableField(DynamicTableField):
 		table = frappe.qb.DocType(self.doctype)
 		main_table = frappe.qb.DocType(self.parent_doctype)
 		if not query.is_joined(table):
-			query = query.left_join(table).on(table.name == getattr(main_table, self.link_fieldname))
+			clause = table.name == getattr(main_table, self.link_fieldname)
+
 			if engine and engine.apply_permissions:
 				if condition := engine.get_permission_conditions(self.doctype, table):
-					query = query.where(condition)
+					clause &= condition
+
+			query = query.left_join(table).on(clause)
 
 		return query
 

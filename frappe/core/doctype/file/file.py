@@ -43,6 +43,8 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True  # nosemgrep
 
 URL_PREFIXES = ("http://", "https://", "/api/method/")
 FILE_ENCODING_OPTIONS = ("utf-8-sig", "utf-8", "windows-1250", "windows-1252")
+# OLE2 Compound File Binary signature, used by legacy .xls/.doc/.ppt files
+OLE_FILE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
 class File(Document):
@@ -101,6 +103,9 @@ class File(Document):
 			self.name = frappe.generate_hash(length=10)
 
 	def before_insert(self):
+		if self.attached_to_doctype and not self.attached_to_name:
+			self.attached_to_doctype = None
+			self.attached_to_field = None
 		# Ensure correct formatting and type
 		self.file_url = unquote(self.file_url) if self.file_url else ""
 
@@ -299,8 +304,8 @@ class File(Document):
 		if self.is_remote_file or not self.file_url:
 			return
 
-		if not self.file_url.startswith(("/files/", "/private/files/", "/api/method/")):
-			# Probably an invalid URL since it doesn't start with http and isn't an internal URL either
+		if not self.file_url.startswith(("/files/", "/private/files/")):
+			# Probably an invalid URL since it doesn't start with http either
 			frappe.throw(
 				_("URL must start with http:// or https://"),
 				title=_("Invalid URL"),
@@ -656,6 +661,7 @@ class File(Document):
 		if self.is_folder:
 			frappe.throw(_("Cannot get file contents of a Folder"))
 
+		self.validate_file_path()
 		# if doc was just created, content field is already populated, return it as-is
 		if self.get("content"):
 			self._content = self.content
@@ -673,16 +679,17 @@ class File(Document):
 			encodings = FILE_ENCODING_OPTIONS
 		with open(file_path, mode="rb") as f:
 			self._content = f.read()
-			# looping will not result in slowdown, as the content is usually utf-8 or utf-8-sig
-			# encoded so the first iteration will be enough most of the time
-			for encoding in encodings:
-				try:
-					# read file with proper encoding
-					self._content = self._content.decode(encoding)
-					break
-				except UnicodeDecodeError:
-					# for .png, .jpg, etc
-					continue
+			if not self._content.startswith(OLE_FILE_SIGNATURE):
+				# looping will not result in slowdown, as the content is usually utf-8 or utf-8-sig
+				# encoded so the first iteration will be enough most of the time
+				for encoding in encodings:
+					try:
+						# read file with proper encoding
+						self._content = self._content.decode(encoding)
+						break
+					except UnicodeDecodeError:
+						# for .png, .jpg, etc
+						continue
 
 		return self._content
 
@@ -902,6 +909,10 @@ class File(Document):
 			content_type=content_type,
 		)
 
+		if original_content == optimized_content:
+			# optimization failed, don't resave it
+			return
+
 		self.save_file(content=optimized_content, overwrite=True)
 		self.save()
 
@@ -963,7 +974,7 @@ def has_permission(doc, ptype=None, user=None, debug=False):
 		attached_to_name = doc.attached_to_name
 
 		try:
-			ref_doc = frappe.get_doc(attached_to_doctype, attached_to_name)
+			ref_doc = frappe.get_lazy_doc(attached_to_doctype, attached_to_name)
 		except (ModuleNotFoundError, ImportError):
 			return False
 		except frappe.DoesNotExistError:

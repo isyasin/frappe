@@ -1,10 +1,9 @@
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # License: MIT. See LICENSE
 
-import re
 from collections.abc import Iterable
 from datetime import timedelta
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 import frappe
 import frappe.defaults
@@ -30,7 +29,6 @@ from frappe.utils import (
 	format_datetime,
 	get_formatted_email,
 	get_system_timezone,
-	has_gravatar,
 	now_datetime,
 	today,
 )
@@ -212,8 +210,8 @@ class User(Document):
 		frappe.cache.delete_key("enabled_users")
 
 	def validate(self):
-		# clear new password
-		self.__new_password = self.new_password
+		if self.new_password:
+			self.__new_password = self.new_password
 		self.new_password = ""
 
 		if not frappe.in_test:
@@ -334,14 +332,6 @@ class User(Document):
 			enqueue_after_commit=True,
 		)
 
-		if self.name not in STANDARD_USERS and not self.user_image:
-			frappe.enqueue(
-				"frappe.core.doctype.user.user.update_gravatar",
-				name=self.name,
-				now=now,
-				enqueue_after_commit=True,
-			)
-
 		# Set user selected timezone
 		if self.time_zone:
 			frappe.defaults.set_default("time_zone", self.time_zone, self.name)
@@ -363,6 +353,9 @@ class User(Document):
 			frappe.cache.delete_key("enabled_users")
 		elif self.has_value_changed("allow_in_mentions") or self.has_value_changed("user_type"):
 			frappe.cache.delete_key("users_for_mentions")
+
+		if self.has_value_changed("user_type"):
+			clear_sessions(user=self.name, force=True)
 
 	def has_website_permission(self, ptype, user, verbose=False):
 		"""Return True if current user is the session user."""
@@ -419,9 +412,6 @@ class User(Document):
 		else:
 			"""Set as System User if any of the given roles has desk_access"""
 			self.user_type = "System User" if self.has_desk_access() else "Website User"
-
-		if self.has_value_changed("user_type"):
-			clear_sessions(user=self.name, force=True)
 
 	def set_roles_and_modules_based_on_user_type(self):
 		user_type_doc = frappe.get_cached_doc("User Type", self.user_type)
@@ -518,19 +508,13 @@ class User(Document):
 	def password_reset_mail(self, link):
 		reset_password_template = frappe.db.get_system_setting("reset_password_template")
 
-		q = self.send_login_mail(
+		self.send_login_mail(
 			_("Password Reset"),
 			"password_reset",
 			{"link": link},
 			now=True,
 			custom_template=reset_password_template,
 		)
-		if q:
-			raw_message = q.message
-			parts = re.split(r"(?i)Dear", raw_message, maxsplit=1)
-			if len(parts) > 1:
-				redacted_message = parts[0] + "[THE FOLLOWING CONTENT HAS BEEN REDACTED FOR SECURITY REASONS]"
-				frappe.db.set_value("Email Queue", q.name, "message", redacted_message, update_modified=False)
 
 	def send_welcome_mail_to_user(self):
 		from frappe.utils import get_url
@@ -549,7 +533,7 @@ class User(Document):
 
 		welcome_email_template = frappe.db.get_system_setting("welcome_email_template")
 
-		q = self.send_login_mail(
+		self.send_login_mail(
 			subject,
 			"new_user",
 			dict(
@@ -558,12 +542,6 @@ class User(Document):
 			),
 			custom_template=welcome_email_template,
 		)
-		if q:
-			raw_message = q.message
-			parts = re.split(r"(?i)Hello", raw_message, maxsplit=1)
-			if len(parts) > 1:
-				redacted_message = parts[0] + "[THE FOLLOWING CONTENT HAS BEEN REDACTED FOR SECURITY REASONS]"
-				frappe.db.set_value("Email Queue", q.name, "message", redacted_message, update_modified=False)
 
 	def send_login_mail(self, subject, template, add_args, now=None, custom_template=None):
 		"""send mail with login details"""
@@ -602,9 +580,10 @@ class User(Document):
 			template=template if not custom_template else None,
 			content=content if custom_template else None,
 			args=args,
-			header=[subject, "green"],
+			with_container=True,
 			delayed=(not now) if now is not None else self.flags.delay_emails,
 			retry=3,
+			redact_message_after_send=True,
 		)
 
 	def on_trash(self):
@@ -903,9 +882,14 @@ class User(Document):
 
 @frappe.whitelist()
 def get_timezones():
-	import zoneinfo
+	return {"timezones": _get_timezones()}
 
-	return {"timezones": zoneinfo.available_timezones()}
+
+@lru_cache(maxsize=1)
+def _get_timezones():
+	import pytz
+
+	return sorted(pytz.common_timezones)
 
 
 @frappe.whitelist()
@@ -1353,12 +1337,6 @@ def handle_password_test_fail(feedback: dict):
 		msg="".join(message_parts),
 		title=_("Password requirements not met"),
 	)
-
-
-def update_gravatar(name):
-	gravatar = has_gravatar(name)
-	if gravatar:
-		frappe.db.set_value("User", name, "user_image", gravatar)
 
 
 def throttle_user_creation():

@@ -8,7 +8,7 @@ import json
 import frappe
 from frappe import _
 from frappe.database.schema import add_column
-from frappe.desk.form.document_follow import follow_document
+from frappe.desk.form.document_follow import _follow_document
 from frappe.utils import get_link_to_form
 
 
@@ -33,6 +33,8 @@ def _toggle_like(doctype, name, add, user=None):
 	if not user:
 		user = frappe.session.user
 
+	frappe.has_permission(doctype, "read", doc=name, throw=True)
+
 	try:
 		liked_by = frappe.db.get_value(doctype, name, "_liked_by")
 
@@ -46,7 +48,7 @@ def _toggle_like(doctype, name, add, user=None):
 				liked_by.append(user)
 				add_comment(doctype, name)
 				if frappe.get_cached_value("User", user, "follow_liked_documents"):
-					follow_document(doctype, name, user)
+					_follow_document(doctype, name, user)
 		else:
 			if user in liked_by:
 				liked_by.remove(user)

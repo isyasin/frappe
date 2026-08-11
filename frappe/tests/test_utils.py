@@ -20,7 +20,6 @@ import frappe
 from frappe.installer import parse_app_name
 from frappe.model.document import Document
 from frappe.tests import IntegrationTestCase, MockedRequestTestCase, UnitTestCase
-from frappe.tests.utils import toggle_test_mode
 from frappe.utils import (
 	ceil,
 	dict_to_str,
@@ -30,7 +29,7 @@ from frappe.utils import (
 	format_timedelta,
 	get_bench_path,
 	get_file_timestamp,
-	get_gravatar,
+	get_identicon,
 	get_link_to_report,
 	get_safe_filters,
 	get_site_info,
@@ -79,6 +78,7 @@ from frappe.utils.data import (
 	map_trackers,
 	now_datetime,
 	nowtime,
+	orjson_dumps,
 	pretty_date,
 	rounded,
 	sha256_hash,
@@ -690,6 +690,10 @@ class TestImage(IntegrationTestCase):
 		self.assertEqual(new_image._getexif(), None)
 		self.assertNotEqual(original_image._getexif(), new_image._getexif())
 
+		# Testing idempotency of strip_exif_data()
+		restripped_image_content = strip_exif_data(new_image_content, "image/jpeg")
+		self.assertEqual(restripped_image_content, new_image_content)
+
 	def test_optimize_image(self):
 		image_file_path = frappe.get_app_path("frappe", "tests", "data", "sample_image_for_optimization.jpg")
 		content_type = guess_type(image_file_path)[0]
@@ -1206,18 +1210,14 @@ class TestLazyLoader(IntegrationTestCase):
 
 
 class TestIdenticon(IntegrationTestCase):
-	def test_get_gravatar(self):
-		# developers@frappe.io has a gravatar linked so str URL will be returned
-		toggle_test_mode(False)
-		gravatar_url = get_gravatar("developers@frappe.io")
-		toggle_test_mode(True)
-		self.assertIsInstance(gravatar_url, str)
-		self.assertTrue(gravatar_url.startswith("http"))
+	def test_get_identicon(self):
+		identicon_url = get_identicon("developers@frappe.io")
+		self.assertIsInstance(identicon_url, str)
+		self.assertTrue(identicon_url.startswith("data:image/png;base64,"))
 
-		# random email will require Identicon to be generated, which will be a base64 string
-		gravatar_url = get_gravatar(f"developers{random_string(6)}@frappe.io")
-		self.assertIsInstance(gravatar_url, str)
-		self.assertTrue(gravatar_url.startswith("data:image/png;base64,"))
+		identicon_url = get_identicon(f"developers{random_string(6)}@frappe.io")
+		self.assertIsInstance(identicon_url, str)
+		self.assertTrue(identicon_url.startswith("data:image/png;base64,"))
 
 	def test_generate_identicon(self):
 		identicon = Identicon(random_string(6))
@@ -1337,13 +1337,13 @@ class TestTypingValidations(IntegrationTestCase):
 class TestTBSanitization(IntegrationTestCase):
 	def test_traceback_sanitzation(self):
 		try:
-			password = "42"  # noqa: F841
-			args = {"password": "42", "pwd": "42", "safe": "safe_value"}
-			args = frappe._dict({"password": "42", "pwd": "42", "safe": "safe_value"})  # noqa: F841
+			password = "424242"  # noqa: F841
+			args = {"password": "424242", "pwd": "424242", "safe": "safe_value"}
+			args = frappe._dict({"password": "424242", "pwd": "424242", "safe": "safe_value"})  # noqa: F841
 			raise Exception
 		except Exception:
 			traceback = frappe.get_traceback(with_context=True)
-			self.assertNotIn("42", traceback)
+			self.assertNotIn("424242", traceback)
 			self.assertIn("********", traceback)
 			self.assertIn("password =", traceback)
 			self.assertIn("safe_value", traceback)
@@ -1494,6 +1494,16 @@ class TestRounding(IntegrationTestCase):
 		self.assertEqual(flt(-1.15, 1, rounding_method=rounding_method), -1.2)
 		self.assertEqual(flt(-2.25, 1, rounding_method=rounding_method), -2.2)
 		self.assertEqual(flt(-3.35, 1, rounding_method=rounding_method), -3.4)
+
+		# Sign-symmetry regression.
+		for value, expected in [
+			(647.325, 647.32),
+			(647.315, 647.32),
+			(0.125, 0.12),
+			(0.135, 0.14),
+		]:
+			self.assertEqual(flt(value, 2, rounding_method=rounding_method), expected)
+			self.assertEqual(flt(-value, 2, rounding_method=rounding_method), -expected)
 
 	@IntegrationTestCase.change_settings("System Settings", {"rounding_method": "Banker's Rounding"})
 	@given(
@@ -1661,6 +1671,18 @@ class TestDataUtils(UnitTestCase):
 
 	def tearDown(self):
 		frappe.local.lang = "en"
+
+	def test_orjson_dumps_fallback_on_large_integers(self):
+		def normalize(v):
+			return json.loads(v)
+
+		big = 2**63 + 1
+		result = orjson_dumps({"big": big})
+		self.assertEqual(normalize(result), normalize(json.dumps({"big": big})))
+
+		result_bytes = orjson_dumps({"big": big}, decode=False)
+		self.assertIsInstance(result_bytes, bytes)
+		self.assertEqual(normalize(result_bytes), normalize(json.dumps({"big": big}).encode()))
 
 	def test_comma_and(self):
 		self.assertEqual(comma_and(["a", "b", "c"]), "'a', 'b', and 'c'")

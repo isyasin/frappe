@@ -112,11 +112,6 @@ def get_context(context):
 	context["login_label"] = f" {_('or')} ".join(login_label)
 
 	context["login_with_email_link"] = frappe.get_system_settings("login_with_email_link")
-	context["login_with_frappe_cloud_url"] = (
-		f"{get_site_login_url()}?site={frappe.local.site}"
-		if on_frappecloud() and frappe.conf.get("fc_communication_secret")
-		else None
-	)
 
 	return context
 
@@ -161,6 +156,7 @@ def send_login_link(email: str):
 			recipients=email,
 			template="login_with_email_link",
 			args={"link": link, "minutes": expiry, "app_name": app_name},
+			with_container=True,
 			now=True,
 		)
 	except frappe.DoesNotExistError:
@@ -181,7 +177,7 @@ def _generate_temporary_login_link(email: str, expiry: int):
 	key = frappe.generate_hash()
 	frappe.cache.set_value(f"one_time_login_key:{key}", email, expires_in_sec=expiry * 60)
 
-	return get_url(f"/api/method/frappe.www.login.login_via_key?key={key}")
+	return get_url(f"/api/method/frappe.www.login.login_via_key?key={key}", allow_header_override=False)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
